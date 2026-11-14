@@ -1,0 +1,1124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EPOC-X CSV Compare</title>
+<style>
+  :root{
+    --bg:#080d18;
+    --panel:#0f172a;
+    --row:#131d31;
+    --surface:#162033;
+    --surface-hover:#1e2d47;
+    --border:#1e293b;
+    --border-bright:#2b3d5c;
+    --text:#e2e8f0;
+    --text-bright:#f8fafc;
+    --muted:#94a3b8;
+    --caption:#64748b;
+    --accentA:#38bdf8;
+    --accentB:#f59e0b;
+    --grid:#1a2740;
+    --zero:#334155;
+    --good:#22c55e;
+    --warn:#eab308;
+    --bad:#ef4444;
+    --font-sans:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;
+    --font-mono:Consolas,"Courier New",monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:13px/1.45 var(--font-sans);}
+
+  /* Custom Studio Scrollbars */
+  ::-webkit-scrollbar{width:9px;height:9px;}
+  ::-webkit-scrollbar-track{background:var(--bg);}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+  ::-webkit-scrollbar-thumb:hover{background:#334155;}
+
+  .metric-cap{
+    color:var(--caption);font-size:10px;font-weight:700;
+    letter-spacing:0.6px;text-transform:uppercase;
+  }
+  #status{
+    display:none;
+    border-radius:8px;padding:8px 12px;
+    font-size:12.5px;font-weight:600;
+  }
+  #status.err{
+    display:block;
+    background:rgba(239,68,68,0.14);
+    border:1px solid rgba(239,68,68,0.55);
+    color:#fca5a5;
+  }
+
+  /* Main Container & Cards */
+  .main-wrap{
+    max-width:1480px;margin:0 auto;padding:12px 16px 24px;
+    display:flex;flex-direction:column;gap:10px;
+  }
+  .panel{
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:10px;padding:11px 14px;
+  }
+  .card-head{
+    display:flex;justify-content:space-between;align-items:center;
+    gap:12px;margin-bottom:9px;flex-wrap:wrap;
+  }
+  .card-title{
+    color:var(--accentA);font-size:11px;font-weight:700;
+    letter-spacing:1px;text-transform:uppercase;
+  }
+  .card-sub{color:var(--muted);font-size:11.5px;}
+
+  /* File Selector Sub-cards */
+  .files-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;}
+  .file-box{
+    background:var(--row);border:1px solid var(--border);border-radius:8px;
+    padding:9px 12px;display:flex;flex-direction:column;gap:6px;
+    transition:border-color .15s,background .15s;
+  }
+  .file-box.drag-over{border-color:var(--accentA);background:var(--surface);}
+  .file-box-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .file-tag{
+    display:inline-flex;align-items:center;gap:6px;
+    font-size:11px;font-weight:700;letter-spacing:0.7px;text-transform:uppercase;
+    color:var(--text-bright);
+  }
+  .swatch{display:inline-block;width:9px;height:9px;border-radius:3px;}
+  .file-name-pill{
+    flex:1;min-width:120px;
+    background:var(--bg);border:1px solid var(--border);border-radius:6px;
+    padding:4px 9px;font-family:var(--font-mono);font-size:12px;color:var(--muted);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .file-name-pill.loaded{color:var(--text);}
+  .native-file-input{
+    position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;
+  }
+  .fileinfo{
+    font-size:11.5px;color:var(--muted);min-height:17px;
+    white-space:pre-line;font-family:var(--font-mono);line-height:1.4;
+  }
+
+  /* Channels Row */
+  .channels-bar{
+    margin-top:10px;padding-top:9px;border-top:1px solid var(--border);
+    display:flex;flex-direction:column;gap:7px;
+  }
+  .channels-bar-head{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  }
+  .channel-actions{display:flex;gap:6px;align-items:center;}
+  #channelChecks{display:flex;flex-wrap:wrap;gap:6px;}
+  #channelChecks label{
+    display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+    font-size:12px;font-weight:600;color:var(--muted);
+    background:var(--row);border:1px solid var(--border);
+    border-radius:6px;padding:4px 9px;user-select:none;
+    transition:background .15s,border-color .15s,color .15s;
+  }
+  #channelChecks label:hover{background:var(--surface-hover);border-color:var(--border-bright);color:var(--text);}
+  #channelChecks label.active{
+    background:rgba(56,189,248,0.16);color:var(--accentA);border-color:var(--accentA);
+  }
+  #channelChecks input[type=checkbox]{
+    appearance:none;-webkit-appearance:none;
+    width:13px;height:13px;margin:0;border-radius:3px;
+    border:1px solid #334155;background:var(--surface);
+    display:grid;place-content:center;cursor:pointer;
+  }
+  #channelChecks input[type=checkbox]:checked{
+    background:#0284c7;border-color:var(--accentA);
+  }
+  #channelChecks input[type=checkbox]:checked::after{
+    content:"";width:7px;height:4px;
+    border-left:1.8px solid #f8fafc;border-bottom:1.8px solid #f8fafc;
+    transform:rotate(-45deg) translate(0.5px,-0.5px);
+  }
+
+  /* Studio Inputs & Buttons */
+  select,button,input[type=number]{
+    font:inherit;font-size:12.5px;padding:5px 11px;
+    border:1px solid var(--border-bright);border-radius:6px;
+    background:var(--surface);color:var(--text);outline:none;
+    transition:background .15s,border-color .15s,color .15s;
+  }
+  select:focus,input[type=number]:focus{border-color:var(--accentA);}
+  input[type=number]{
+    font-family:var(--font-mono);
+    -moz-appearance:textfield;appearance:textfield;
+  }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button{
+    -webkit-appearance:none;margin:0;
+  }
+  button{cursor:pointer;font-weight:600;}
+  button:hover{background:var(--surface-hover);border-color:var(--accentA);color:var(--text-bright);}
+  button.btn-sm{padding:3px 9px;font-size:11.5px;}
+  button.btn-primary{background:#0284c7;color:#f8fafc;border-color:var(--accentA);}
+  button.btn-primary:hover{background:#0369a1;}
+
+  /* Custom Range Sliders */
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;
+    background:transparent;cursor:pointer;height:18px;margin:0;
+  }
+  input[type=range]::-webkit-slider-runnable-track{
+    height:5px;border-radius:3px;background:var(--border);border:1px solid var(--border-bright);
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:13px;height:13px;border-radius:50%;margin-top:-5px;
+    background:var(--accentA);border:2px solid var(--panel);
+    box-shadow:0 0 0 1px var(--accentA);
+  }
+  input[type=range]:hover::-webkit-slider-thumb{background:#7dd3fc;}
+  #shiftSlider{width:160px;}
+  #scrub{flex:1;width:100%;}
+
+  /* Controls Panel */
+  .controls-row{display:flex;flex-wrap:wrap;gap:16px;align-items:center;}
+  .ctrl-group{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .ctrl-divider{width:1px;height:20px;background:var(--border);}
+  .scrub-row{
+    margin-top:9px;padding-top:9px;border-top:1px solid var(--border);
+    display:flex;align-items:center;gap:10px;
+  }
+  .time-mono{font-family:var(--font-mono);font-size:11.5px;color:var(--muted);min-width:48px;}
+  .hint{color:var(--caption);font-size:11.5px;}
+
+  /* Cursor Inspection Bar */
+  #cursorPanel{
+    background:var(--panel);border:1px solid var(--border);border-radius:10px;
+    padding:8px 14px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    min-height:38px;
+  }
+  .cursor-item{
+    display:inline-flex;align-items:center;gap:6px;
+    background:var(--row);border:1px solid var(--border);border-radius:6px;
+    padding:3px 9px;font-family:var(--font-mono);font-size:12px;color:var(--text);
+  }
+
+  /* Channel Waveform Cards */
+  #channels{display:flex;flex-direction:column;gap:10px;}
+  .chan-block{
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:10px;overflow:hidden;
+    transition:border-color .15s;
+  }
+  .chan-block:hover{border-color:var(--border-bright);}
+  .chan-head{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:7px 12px;border-bottom:1px solid var(--border);
+    background:var(--row);font-size:12px;flex-wrap:wrap;gap:8px;
+  }
+  .chan-head-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .chan-head-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-family:var(--font-mono);font-size:11.5px;}
+  .chan-head .name{
+    font-weight:700;font-size:12px;letter-spacing:0.05em;
+    color:var(--accentA);
+    background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.35);
+    border-radius:5px;padding:1px 7px;
+  }
+  .chan-head .corr{
+    color:var(--muted);font-family:var(--font-mono);font-size:11.5px;
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:5px;padding:2px 8px;
+  }
+  .chan-head .corr b{color:var(--text-bright);}
+  .chan-head .corr.corr-good b{color:var(--good);}
+  canvas{display:block;width:100%;height:170px;cursor:grab;background:var(--bg);}
+  canvas:active{cursor:grabbing;}
+</style>
+</head>
+<body>
+<div class="main-wrap">
+  <div id="status"></div>
+  <div class="panel">
+    <div class="card-head">
+      <span class="card-title">Recordings &amp; Channels</span>
+      <span class="card-sub">Client-side comparison &mdash; drop or browse two timestamped CSV recordings</span>
+    </div>
+    <div class="files-grid">
+      <div class="file-box" id="dropA">
+        <div class="file-box-top">
+          <span class="file-tag"><span class="swatch" style="background:var(--accentA)"></span>File A</span>
+          <span class="file-name-pill" id="nameA">original / reference CSV</span>
+          <button type="button" id="browseA">Browse...</button>
+          <input class="native-file-input" type="file" id="fileA" accept=".csv,text/csv,.txt,*">
+        </div>
+        <div class="fileinfo" id="infoA">no file loaded</div>
+      </div>
+      <div class="file-box" id="dropB">
+        <div class="file-box-top">
+          <span class="file-tag"><span class="swatch" style="background:var(--accentB)"></span>File B</span>
+          <span class="file-name-pill" id="nameB">comparison / .reread.csv</span>
+          <button type="button" id="browseB">Browse...</button>
+          <input class="native-file-input" type="file" id="fileB" accept=".csv,text/csv,.txt,*">
+        </div>
+        <div class="fileinfo" id="infoB">no file loaded</div>
+      </div>
+    </div>
+    <div class="channels-bar">
+      <div class="channels-bar-head">
+        <span class="metric-cap">VISIBLE CHANNELS</span>
+        <div class="channel-actions">
+          <button type="button" class="btn-sm" id="chPresetEeg">EEG Only</button>
+          <button type="button" class="btn-sm" id="chPresetAll">All</button>
+          <button type="button" class="btn-sm" id="chPresetNone">None</button>
+        </div>
+      </div>
+      <div id="channelChecks"><span class="hint">Load a CSV file to select channels.</span></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="card-head">
+      <span class="card-title">View</span>
+      <span class="card-sub">Scroll wheel zooms at cursor &middot; Drag to pan &middot; Click to drop a cursor &middot; Live Pearson <i>r</i> uses nearest-sample matching</span>
+    </div>
+    <div class="controls-row">
+      <div class="ctrl-group">
+        <span class="metric-cap">ZOOM:</span>
+        <select id="zoomSelect"></select>
+        <button id="zoomOut" title="Zoom out (-)">&minus;</button>
+        <button id="zoomIn" title="Zoom in (+)">+</button>
+      </div>
+      <div class="ctrl-divider"></div>
+      <div class="ctrl-group">
+        <button id="panHome" title="Jump to start">|&larr; Start</button>
+        <button id="panLeft" title="Pan left (Left Arrow)">&larr; Pan</button>
+        <button id="panRight" title="Pan right (Right Arrow)">Pan &rarr;</button>
+      </div>
+      <div class="ctrl-divider"></div>
+      <div class="ctrl-group">
+        <span class="metric-cap">SHIFT FILE B:</span>
+        <input type="number" id="shiftMs" value="0" step="1" style="width:72px;">
+        <span class="hint">ms</span>
+        <input type="range" id="shiftSlider" min="-5000" max="5000" step="1" value="0">
+        <button id="shiftReset">Reset</button>
+      </div>
+    </div>
+    <div class="scrub-row">
+      <span class="metric-cap">TIMELINE:</span>
+      <span class="time-mono" id="scrubStart">0.0s</span>
+      <input type="range" id="scrub" min="0" max="1" step="0.0001" value="0">
+      <span class="time-mono" id="scrubEnd" style="text-align:right;">10.0s</span>
+    </div>
+  </div>
+
+  <div id="cursorPanel"><span class="hint">Click on any plot to place a synchronized measurement cursor.</span></div>
+
+  <div id="channels"></div>
+</div>
+
+<script>
+'use strict';
+
+/* ---------- constants ---------- */
+const COLOR_A = getComputedStyle(document.documentElement).getPropertyValue('--accentA') || '#2b6cb0';
+const COLOR_B = getComputedStyle(document.documentElement).getPropertyValue('--accentB') || '#dd6b20';
+
+const ZOOM_STEPS = [
+  {label:'Full recording', sec:null},
+  {label:'10 min', sec:600},
+  {label:'5 min', sec:300},
+  {label:'2 min', sec:120},
+  {label:'1 min', sec:60},
+  {label:'30 s', sec:30},
+  {label:'10 s', sec:10},
+  {label:'5 s', sec:5},
+  {label:'2 s', sec:2},
+  {label:'1 s', sec:1},
+  {label:'0.5 s', sec:0.5},
+];
+
+const TICK_CANDIDATES = [0.001,0.002,0.005,0.01,0.02,0.05,0.1,0.2,0.5,1,2,5,10,15,30,60,120,300,600,900,1800,3600];
+
+/* ---------- utilities ---------- */
+
+function lowerBound(arr, len, target){
+  let lo = 0, hi = len;
+  while (lo < hi){
+    const mid = (lo + hi) >>> 1;
+    if (arr[mid] < target) lo = mid + 1; else hi = mid;
+  }
+  return lo;
+}
+
+function niceTickStep(widthSec, targetTicks){
+  const raw = widthSec / targetTicks;
+  for (const c of TICK_CANDIDATES) if (c >= raw) return c;
+  return TICK_CANDIDATES[TICK_CANDIDATES.length - 1];
+}
+
+function fmtTime(sec){
+  const neg = sec < 0; sec = Math.abs(sec);
+  const h = Math.floor(sec/3600);
+  const m = Math.floor((sec%3600)/60);
+  const s = sec % 60;
+  let str;
+  if (h>0) str = h+':'+String(m).padStart(2,'0')+':'+s.toFixed(0).padStart(2,'0');
+  else if (m>0) str = m+':'+s.toFixed(s<10?2:1).padStart(4,'0');
+  else str = s.toFixed(3)+'s';
+  return (neg?'-':'')+str;
+}
+
+function fmtDuration(sec){
+  if (!isFinite(sec)) return '?';
+  const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=Math.floor(sec%60);
+  if (h>0) return `${h}h${String(m).padStart(2,'0')}m${String(s).padStart(2,'0')}s`;
+  if (m>0) return `${m}m${String(s).padStart(2,'0')}s`;
+  return `${sec.toFixed(1)}s`;
+}
+
+/* ---------- CSV parsing ----------
+   Timestamps are ~1.79e18 ns, beyond Number's exact-integer range (2^53).
+   Number() rounds each to the nearest double, absolute error ~a few hundred
+   ns -- irrelevant at the ms-scale this tool works at, since we only ever
+   difference two such values (shift math, decimation) rather than rely on
+   their exact absolute magnitude. */
+function parseCSV(text, label){
+  const len = text.length;
+  let pos = 0;
+
+  function nextNonEmptyLine(){
+    while (pos < len){
+      let nl = text.indexOf('\n', pos);
+      if (nl < 0) nl = len;
+      let end = (nl > pos && text.charCodeAt(nl - 1) === 13) ? nl - 1 : nl;
+      let s = pos;
+      pos = nl + 1;
+      while (s < end && text.charCodeAt(s) <= 32) s++;
+      while (end > s && text.charCodeAt(end - 1) <= 32) end--;
+      if (s < end) return text.slice(s, end);
+    }
+    return null;
+  }
+
+  const headerLine = nextNonEmptyLine();
+  if (headerLine === null) throw new Error(label + ': empty file');
+  const header = headerLine.split(',').map(h => h.trim());
+  const tsIdx = header.indexOf('timestamp_ns');
+  if (tsIdx < 0) throw new Error(label + ': no timestamp_ns column found');
+  const chanCols = [];
+  header.forEach((h, idx) => {
+    if (idx === tsIdx) return;
+    if (h === 'timestamp_iso') return;
+    if (h === '' ) return;
+    if (h.endsWith('_q')) return;
+    chanCols.push({name: h, idx});
+  });
+
+  const dataStartPos = pos;
+  let n = 0;
+  while (nextNonEmptyLine() !== null) n++;
+
+  const ts = new Float64Array(n);
+  const values = {};
+  for (const c of chanCols) values[c.name] = new Float32Array(n);
+
+  pos = dataStartPos;
+  let row = 0;
+  let line;
+  while ((line = nextNonEmptyLine()) !== null){
+    const fields = line.split(',');
+    ts[row] = Number(fields[tsIdx]);
+    for (let k = 0; k < chanCols.length; k++){
+      const c = chanCols[k];
+      const f = fields[c.idx];
+      values[c.name][row] = (f === undefined || f === '') ? NaN : Number(f);
+    }
+    row++;
+  }
+
+  // median sample interval, from up to the first 500 diffs
+  let interval = 0.007e9; // fallback: 7ms
+  if (n > 1){
+    const sampleCount = Math.min(500, n - 1);
+    const diffs = new Float64Array(sampleCount);
+    for (let i = 0; i < sampleCount; i++) diffs[i] = ts[i+1] - ts[i];
+    diffs.sort();
+    interval = diffs[Math.floor(sampleCount/2)];
+  }
+
+  return {
+    label, n, ts, values,
+    channels: chanCols.map(c => c.name),
+    medianIntervalNs: interval,
+  };
+}
+
+/* ---------- correlation (nearest-sample matching) ---------- */
+function computeCorrelation(fileA, chA, fileB, chB, shiftNs, startAbs, endAbs, toleranceNs){
+  const tsA = fileA.ts, valA = fileA.values[chA];
+  const tsB = fileB.ts, valB = fileB.values[chB];
+  const nB = fileB.n;
+  const loA = lowerBound(tsA, fileA.n, startAbs);
+  const hiA = lowerBound(tsA, fileA.n, endAbs);
+  let sumA=0,sumB=0,sumAB=0,sumAA=0,sumBB=0,n=0;
+  let j = (loA < hiA && nB > 0) ? lowerBound(tsB, nB, tsA[loA] - shiftNs) : 0;
+  for (let i = loA; i < hiA; i++){
+    const a = valA[i];
+    if (Number.isNaN(a)) continue;
+    const targetB = tsA[i] - shiftNs; // effective B time = raw + shift; want effective == tsA[i]
+    if (j > 0 && tsB[j - 1] >= targetB){
+      j = lowerBound(tsB, nB, targetB);
+    } else {
+      while (j < nB && tsB[j] < targetB) j++;
+    }
+    let best = -1, bestDiff = Infinity;
+    if (j < nB){ const d = Math.abs(tsB[j]-targetB); if (d<bestDiff){bestDiff=d;best=j;} }
+    if (j-1 >= 0){ const d = Math.abs(tsB[j-1]-targetB); if (d<bestDiff){bestDiff=d;best=j-1;} }
+    if (best < 0 || bestDiff > toleranceNs) continue;
+    const b = valB[best];
+    if (Number.isNaN(b)) continue;
+    sumA+=a; sumB+=b; sumAB+=a*b; sumAA+=a*a; sumBB+=b*b; n++;
+  }
+  if (n < 2) return {r: NaN, n};
+  const meanA = sumA/n, meanB = sumB/n;
+  const covxy = sumAB/n - meanA*meanB;
+  const varx = sumAA/n - meanA*meanA;
+  const vary = sumBB/n - meanB*meanB;
+  const denom = Math.sqrt(varx*vary);
+  return {r: denom>0 ? covxy/denom : NaN, n};
+}
+
+/* ---------- decimation for rendering ----------
+   One pass over [rawStart,rawEnd), bucketed into pxWidth equal-time columns
+   (ts is sorted, so a single forward-moving pointer suffices). Each column
+   keeps min/max (so isolated spikes stay visible even zoomed far out over a
+   long recording) and a running mean (drawn as a connecting line so the
+   trace still reads as continuous when zoomed in close, near 1 sample/px). */
+function decimate(ts, nLen, val, rawStart, rawEnd, pxWidth){
+  const out = new Array(pxWidth).fill(null);
+  let gMin = Infinity, gMax = -Infinity;
+  if (rawEnd <= rawStart || nLen === 0) return {out, gMin, gMax};
+  const lo = lowerBound(ts, nLen, rawStart);
+  const hi = lowerBound(ts, nLen, rawEnd);
+  if (hi <= lo) return {out, gMin, gMax};
+  const span = rawEnd - rawStart;
+  let idx = lo;
+  for (let px = 0; px < pxWidth; px++){
+    const colEnd = rawStart + span * ((px+1)/pxWidth);
+    let mn=Infinity, mx=-Infinity, sum=0, cnt=0;
+    while (idx < hi && ts[idx] < colEnd){
+      const v = val[idx];
+      if (!Number.isNaN(v)){ if (v<mn) mn=v; if (v>mx) mx=v; sum+=v; cnt++; }
+      idx++;
+    }
+    if (cnt > 0){
+      out[px] = {min:mn, max:mx, mean:sum/cnt};
+      if (mn<gMin) gMin=mn;
+      if (mx>gMax) gMax=mx;
+    }
+  }
+  return {out, gMin, gMax};
+}
+
+/* ---------- state ---------- */
+const state = {
+  fileA: null, fileB: null,
+  epoch: 0,                 // ns, min of both files' first raw timestamp
+  totalDurationSec: 10,     // full-recording span
+  selectedChannels: [],
+  shiftMs: 0,
+  windowStartSec: 0,
+  windowWidthSec: 10,
+  zoomIdx: 0,
+  toleranceNs: 5e6,         // default; refined once File A loads
+  cursor: null,             // {tSec} epoch-relative, set by clicking a plot
+};
+
+/* ---------- DOM refs ---------- */
+const el = id => document.getElementById(id);
+const statusEl = el('status');
+const zoomSelect = el('zoomSelect');
+const channelChecksEl = el('channelChecks');
+const channelsEl = el('channels');
+const scrubEl = el('scrub');
+const shiftMsEl = el('shiftMs');
+const shiftSliderEl = el('shiftSlider');
+const scrubStartEl = el('scrubStart');
+const scrubEndEl = el('scrubEnd');
+
+const EEG_CHANNELS = new Set(['AF3','F7','F3','FC5','T7','P7','O1','O2','P8','T8','FC6','F4','F8','AF4']);
+
+ZOOM_STEPS.forEach((z, i) => {
+  const opt = document.createElement('option');
+  opt.value = i; opt.textContent = z.label;
+  zoomSelect.appendChild(opt);
+});
+
+function setStatus(msg, isErr){
+  statusEl.textContent = msg || '';
+  statusEl.className = isErr ? 'err' : '';
+}
+
+/* ---------- file loading ---------- */
+function setFileNamePill(which, fileName){
+  const pill = el(which === 'fileA' ? 'nameA' : 'nameB');
+  if (!pill) return;
+  pill.textContent = fileName;
+  pill.classList.add('loaded');
+}
+
+function loadCSVText(which, text, fileName){
+  setStatus('Parsing ' + fileName + ' ...', false, 'busy');
+  setTimeout(() => { // let the "parsing" status paint before the sync parse blocks the UI thread
+    try {
+      const parsed = parseCSV(text, fileName);
+      state[which] = parsed;
+      if (which === 'fileA') state.toleranceNs = Math.max(1e6, parsed.medianIntervalNs * 1.5);
+      recomputeEpochAndDuration();
+      rebuildChannelUI();
+      setFileNamePill(which, fileName);
+      el(which === 'fileA' ? 'infoA' : 'infoB').textContent =
+        `${parsed.n.toLocaleString()} rows · ${fmtDuration((parsed.ts[parsed.n-1]-parsed.ts[0])/1e9)}\n` +
+        `channels: ${parsed.channels.join(', ')}`;
+      setStatus('Loaded ' + fileName, false, 'ready');
+      applyZoomStep(state.zoomIdx === undefined ? 0 : state.zoomIdx, 0.5);
+      scheduleRender();
+    } catch (e) {
+      setStatus('Error parsing ' + fileName + ': ' + e.message, true, 'err');
+      console.error(e);
+    }
+  }, 10);
+}
+window.loadCSVText = loadCSVText;
+
+function loadCSVUrl(which, url, fileName){
+  setStatus('Reading ' + fileName + ' ...', false, 'busy');
+  const xhr = new XMLHttpRequest();
+  xhr.open('GET', url, true);
+  xhr.responseType = 'text';
+  xhr.onload = () => {
+    if (xhr.status === 200 || xhr.status === 0){
+      loadCSVText(which, xhr.responseText, fileName);
+    } else {
+      setStatus('Failed to read ' + fileName + ' (HTTP ' + xhr.status + ')', true, 'err');
+    }
+  };
+  xhr.onerror = () => setStatus('Failed to read ' + fileName, true, 'err');
+  xhr.send();
+}
+window.loadCSVUrl = loadCSVUrl;
+
+function readBrowserFile(f, which){
+  if (!f) return;
+  setStatus('Reading ' + f.name + ' ...', false, 'busy');
+  const reader = new FileReader();
+  reader.onerror = () => setStatus('Failed to read ' + f.name, true, 'err');
+  reader.onload = () => loadCSVText(which, reader.result, f.name);
+  reader.readAsText(f);
+}
+
+function loadFile(input, which){
+  readBrowserFile(input.files[0], which);
+}
+el('fileA').addEventListener('change', () => loadFile(el('fileA'), 'fileA'));
+el('fileB').addEventListener('change', () => loadFile(el('fileB'), 'fileB'));
+el('browseA').addEventListener('click', () => el('fileA').click());
+el('browseB').addEventListener('click', () => el('fileB').click());
+
+function wireDropZone(dropId, which){
+  const box = el(dropId);
+  if (!box) return;
+  box.addEventListener('dragover', (e) => { e.preventDefault(); box.classList.add('drag-over'); });
+  box.addEventListener('dragleave', () => box.classList.remove('drag-over'));
+  box.addEventListener('drop', (e) => {
+    e.preventDefault();
+    box.classList.remove('drag-over');
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]){
+      readBrowserFile(e.dataTransfer.files[0], which);
+    }
+  });
+}
+wireDropZone('dropA', 'fileA');
+wireDropZone('dropB', 'fileB');
+
+function recomputeEpochAndDuration(){
+  const starts = [], ends = [];
+  if (state.fileA && state.fileA.n>0){ starts.push(state.fileA.ts[0]); ends.push(state.fileA.ts[state.fileA.n-1]); }
+  if (state.fileB && state.fileB.n>0){ starts.push(state.fileB.ts[0]); ends.push(state.fileB.ts[state.fileB.n-1]); }
+  if (starts.length === 0){ state.epoch = 0; state.totalDurationSec = 10; return; }
+  state.epoch = Math.min(...starts);
+  state.totalDurationSec = Math.max(1e-3, (Math.max(...ends) - state.epoch) / 1e9);
+}
+
+/* ---------- channel selection UI ---------- */
+let availableChannels = [];
+
+function getAvailableChannels(){
+  if (state.fileA && state.fileB){
+    const setB = new Set(state.fileB.channels);
+    return state.fileA.channels.filter(c => setB.has(c));
+  }
+  if (state.fileA) return state.fileA.channels.slice();
+  if (state.fileB) return state.fileB.channels.slice();
+  return [];
+}
+
+function syncChannelCheckStyles(){
+  const selectedSet = new Set(state.selectedChannels);
+  for (const lbl of channelChecksEl.querySelectorAll('label')){
+    const cb = lbl.querySelector('input[type=checkbox]');
+    if (!cb) continue;
+    cb.checked = selectedSet.has(cb.value);
+    lbl.classList.toggle('active', cb.checked);
+  }
+}
+
+function rebuildChannelUI(){
+  const chans = getAvailableChannels();
+  availableChannels = chans;
+
+  let selected = state.selectedChannels.filter(c => chans.includes(c));
+  if (selected.length === 0){
+    if (chans.includes('F3') && chans.includes('F8')) selected = ['F3','F8'];
+    else selected = chans.slice(0, 2);
+  }
+  state.selectedChannels = selected;
+
+  channelChecksEl.innerHTML = '';
+  if (chans.length === 0){
+    channelChecksEl.innerHTML = '<span class="hint">Load a CSV file to select channels.</span>';
+  }
+  for (const c of chans){
+    const lbl = document.createElement('label');
+    if (selected.includes(c)) lbl.classList.add('active');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.value = c; cb.checked = selected.includes(c);
+    cb.addEventListener('change', () => {
+      const s = new Set(state.selectedChannels);
+      if (cb.checked) s.add(c); else s.delete(c);
+      state.selectedChannels = chans.filter(ch => s.has(ch)); // keep stable order
+      syncChannelCheckStyles();
+      rebuildChannelBlocks();
+      scheduleRender();
+    });
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(c));
+    channelChecksEl.appendChild(lbl);
+  }
+  syncChannelCheckStyles();
+  rebuildChannelBlocks();
+}
+
+el('chPresetEeg').addEventListener('click', () => {
+  const eeg = availableChannels.filter(c => EEG_CHANNELS.has(c));
+  state.selectedChannels = eeg.length > 0 ? eeg : availableChannels.slice(0, 14);
+  syncChannelCheckStyles();
+  rebuildChannelBlocks();
+  scheduleRender();
+});
+el('chPresetAll').addEventListener('click', () => {
+  state.selectedChannels = availableChannels.slice();
+  syncChannelCheckStyles();
+  rebuildChannelBlocks();
+  scheduleRender();
+});
+el('chPresetNone').addEventListener('click', () => {
+  state.selectedChannels = [];
+  syncChannelCheckStyles();
+  rebuildChannelBlocks();
+  scheduleRender();
+});
+
+const channelCanvases = {}; // name -> {canvas, ctx, corrEl, hoverEl}
+
+function rebuildChannelBlocks(){
+  channelsEl.innerHTML = '';
+  for (const key in channelCanvases) delete channelCanvases[key];
+  for (const name of state.selectedChannels){
+    const block = document.createElement('div');
+    block.className = 'chan-block';
+    block.innerHTML = `
+      <div class="chan-head">
+        <div class="chan-head-left">
+          <span class="name">${name}</span>
+          <span class="corr" id="corr-${cssId(name)}">&mdash;</span>
+        </div>
+        <div class="chan-head-right">
+          <span class="hint" id="curval-${cssId(name)}"></span>
+          <span class="hint" id="hover-${cssId(name)}"></span>
+        </div>
+      </div>`;
+    const canvas = document.createElement('canvas');
+    block.appendChild(canvas);
+    channelsEl.appendChild(block);
+    const ctx = canvas.getContext('2d');
+    channelCanvases[name] = {canvas, ctx, corrEl: el('corr-'+cssId(name)), hoverEl: el('hover-'+cssId(name))};
+    wireCanvasInteraction(canvas, name);
+  }
+}
+function cssId(name){ return name.replace(/[^a-zA-Z0-9]/g,'_'); }
+
+/* ---------- zoom / pan / shift ---------- */
+function applyZoomStep(idx, anchorFrac){
+  idx = Math.max(0, Math.min(ZOOM_STEPS.length-1, idx));
+  const newWidth = ZOOM_STEPS[idx].sec === null ? state.totalDurationSec : ZOOM_STEPS[idx].sec;
+  const anchorTime = state.windowStartSec + anchorFrac * state.windowWidthSec;
+  state.windowStartSec = anchorTime - anchorFrac * newWidth;
+  state.windowWidthSec = newWidth;
+  state.zoomIdx = idx;
+  clampWindow();
+  zoomSelect.value = idx;
+  scheduleRender();
+}
+function clampWindow(){
+  const minStart = -state.windowWidthSec;
+  const maxStart = state.totalDurationSec;
+  if (state.windowStartSec < minStart) state.windowStartSec = minStart;
+  if (state.windowStartSec > maxStart) state.windowStartSec = maxStart;
+}
+zoomSelect.addEventListener('change', () => applyZoomStep(Number(zoomSelect.value), 0.5));
+el('zoomIn').addEventListener('click', () => applyZoomStep(state.zoomIdx+1, 0.5));
+el('zoomOut').addEventListener('click', () => applyZoomStep(state.zoomIdx-1, 0.5));
+
+function pan(fracOfWidth){
+  state.windowStartSec += fracOfWidth * state.windowWidthSec;
+  clampWindow();
+  scheduleRender();
+}
+el('panLeft').addEventListener('click', () => pan(-0.8));
+el('panRight').addEventListener('click', () => pan(0.8));
+el('panHome').addEventListener('click', () => { state.windowStartSec = 0; clampWindow(); scheduleRender(); });
+
+scrubEl.addEventListener('input', () => {
+  const frac = Number(scrubEl.value);
+  state.windowStartSec = frac * state.totalDurationSec - state.windowWidthSec/2;
+  clampWindow();
+  scheduleRender();
+});
+
+function setShift(ms){
+  ms = Math.max(-5000, Math.min(5000, ms));
+  state.shiftMs = ms;
+  shiftMsEl.value = ms;
+  shiftSliderEl.value = ms;
+  scheduleRender();
+}
+shiftMsEl.addEventListener('input', () => setShift(Number(shiftMsEl.value)||0));
+shiftSliderEl.addEventListener('input', () => setShift(Number(shiftSliderEl.value)));
+el('shiftReset').addEventListener('click', () => setShift(0));
+
+document.addEventListener('keydown', (e) => {
+  if (document.activeElement && ['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+  if (e.key === 'ArrowLeft') pan(-0.2);
+  else if (e.key === 'ArrowRight') pan(0.2);
+  else if (e.key === '+' || e.key === '=') applyZoomStep(state.zoomIdx+1, 0.5);
+  else if (e.key === '-') applyZoomStep(state.zoomIdx-1, 0.5);
+});
+
+function wireCanvasInteraction(canvas, name){
+  let dragging = false, dragStartX = 0, dragStartWindowStart = 0;
+  canvas.addEventListener('mousedown', (e) => {
+    dragging = true; dragStartX = e.clientX; dragStartWindowStart = state.windowStartSec;
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const cssW = canvas.getBoundingClientRect().width;
+    const deltaPx = e.clientX - dragStartX;
+    state.windowStartSec = dragStartWindowStart - (deltaPx/cssW) * state.windowWidthSec;
+    clampWindow();
+    scheduleRender();
+  });
+  window.addEventListener('mouseup', (e) => {
+    if (dragging && Math.abs(e.clientX - dragStartX) < 4){
+      const rect = canvas.getBoundingClientRect();
+      const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      setCursor(state.windowStartSec + frac * state.windowWidthSec);
+    }
+    dragging = false;
+  });
+
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    applyZoomStep(state.zoomIdx + (e.deltaY < 0 ? 1 : -1), frac);
+  }, {passive:false});
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (dragging) return;
+    const rect = canvas.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const tSec = state.windowStartSec + frac * state.windowWidthSec;
+    showHover(name, tSec);
+  });
+  canvas.addEventListener('mouseleave', () => {
+    const c = channelCanvases[name];
+    if (c) c.hoverEl.textContent = '';
+  });
+}
+
+function showHover(name, tSec){
+  const c = channelCanvases[name];
+  if (!c) return;
+  const abs = tSec*1e9 + state.epoch;
+  let txt = 't=' + fmtTime(tSec);
+  if (state.fileA){
+    const i = nearestIndex(state.fileA.ts, state.fileA.n, abs);
+    if (i>=0) txt += `  A=${fmtVal(state.fileA.values[name] ? state.fileA.values[name][i] : NaN)}`;
+  }
+  if (state.fileB){
+    const targetB = abs - state.shiftMs*1e6;
+    const i = nearestIndex(state.fileB.ts, state.fileB.n, targetB);
+    if (i>=0) txt += `  B=${fmtVal(state.fileB.values[name] ? state.fileB.values[name][i] : NaN)}`;
+  }
+  c.hoverEl.textContent = txt;
+}
+function fmtVal(v){ return (v===undefined || Number.isNaN(v)) ? 'n/a' : v.toFixed(2)+'µV'; }
+function nearestIndex(ts, n, target){
+  if (n===0) return -1;
+  const j = lowerBound(ts, n, target);
+  let best=-1, bestDiff=Infinity;
+  if (j<n){ const d=Math.abs(ts[j]-target); if(d<bestDiff){bestDiff=d;best=j;} }
+  if (j-1>=0){ const d=Math.abs(ts[j-1]-target); if(d<bestDiff){bestDiff=d;best=j-1;} }
+  return best;
+}
+function fmtAbsTs(rawNs){
+  if (!isFinite(rawNs)) return 'n/a';
+  return new Date(rawNs/1e6).toISOString();
+}
+
+/* ---------- click cursor (persistent, vs. the ephemeral hover above) ---------- */
+function setCursor(tSec){
+  state.cursor = {tSec};
+  scheduleRender();
+}
+function clearCursor(){
+  state.cursor = null;
+  scheduleRender();
+}
+
+function updateCursorPanel(){
+  const panel = el('cursorPanel');
+  if (!state.cursor){
+    panel.innerHTML = '<span class="hint">Click on any plot to place a synchronized measurement cursor.</span>';
+    for (const name of state.selectedChannels){
+      const cv = el('curval-'+cssId(name));
+      if (cv) cv.textContent = '';
+    }
+    return;
+  }
+  const abs = state.cursor.tSec*1e9 + state.epoch;
+  let idxA = -1, idxB = -1, rawA = NaN, rawB = NaN;
+  let html = '<span class="metric-cap">CURSOR:</span>';
+  if (state.fileA && state.fileA.n>0){
+    idxA = nearestIndex(state.fileA.ts, state.fileA.n, abs);
+    if (idxA>=0){
+      rawA = state.fileA.ts[idxA];
+      html += `<span class="cursor-item"><span class="swatch" style="background:${COLOR_A}"></span><b>A</b> t=${fmtTime((rawA-state.fileA.ts[0])/1e9)} &middot; ${fmtAbsTs(rawA)}</span>`;
+    }
+  }
+  if (state.fileB && state.fileB.n>0){
+    const target = abs - state.shiftMs*1e6;
+    idxB = nearestIndex(state.fileB.ts, state.fileB.n, target);
+    if (idxB>=0){
+      rawB = state.fileB.ts[idxB];
+      html += `<span class="cursor-item"><span class="swatch" style="background:${COLOR_B}"></span><b>B</b> t=${fmtTime((rawB-state.fileB.ts[0])/1e9)} &middot; ${fmtAbsTs(rawB)}</span>`;
+    }
+  }
+  html += `<button id="clearCursorBtn" class="btn-sm">Clear Cursor</button>`;
+  panel.innerHTML = html;
+  const btn = el('clearCursorBtn');
+  if (btn) btn.addEventListener('click', clearCursor);
+
+  for (const name of state.selectedChannels){
+    const cv = el('curval-'+cssId(name));
+    if (!cv) continue;
+    const vA = (idxA>=0 && state.fileA && state.fileA.values[name]) ? state.fileA.values[name][idxA] : undefined;
+    const vB = (idxB>=0 && state.fileB && state.fileB.values[name]) ? state.fileB.values[name][idxB] : undefined;
+    cv.innerHTML = `cursor: <span style="color:${COLOR_A}">A=${fmtVal(vA)}</span> `
+                  + `<span style="color:${COLOR_B}">B=${fmtVal(vB)}</span>`;
+  }
+}
+
+/* ---------- render ---------- */
+let renderScheduled = false;
+let cssThemeCache = null;
+
+function refreshCssThemeCache(){
+  const style = getComputedStyle(document.documentElement);
+  const readVar = name => style.getPropertyValue(name).trim() || '#888';
+  cssThemeCache = {
+    '--grid': readVar('--grid'),
+    '--caption': readVar('--caption'),
+    '--zero': readVar('--zero'),
+    '--border': readVar('--border'),
+    '--muted': readVar('--muted'),
+    '--text': readVar('--text'),
+  };
+}
+
+function scheduleRender(){
+  if (renderScheduled) return;
+  renderScheduled = true;
+  requestAnimationFrame(() => { renderScheduled = false; render(); });
+}
+
+function render(){
+  refreshCssThemeCache();
+  scrubEl.value = state.totalDurationSec>0
+    ? Math.max(0, Math.min(1, (state.windowStartSec + state.windowWidthSec/2)/state.totalDurationSec))
+    : 0;
+  if (scrubStartEl) scrubStartEl.textContent = fmtTime(0);
+  if (scrubEndEl) scrubEndEl.textContent = fmtDuration(state.totalDurationSec);
+
+  const widths = {};
+  for (const name of state.selectedChannels){
+    const c = channelCanvases[name];
+    if (!c) continue;
+    const rect = c.canvas.getBoundingClientRect();
+    widths[name] = Math.max(50, Math.floor(rect.width || c.canvas.clientWidth || 600));
+  }
+
+  for (const name of state.selectedChannels){
+    renderChannel(name, widths[name]);
+  }
+  updateCursorPanel();
+}
+
+function renderChannel(name, premeasuredCssW){
+  const c = channelCanvases[name];
+  if (!c) return;
+  const {canvas, ctx} = c;
+  const cssW = premeasuredCssW || Math.max(50, Math.floor(canvas.getBoundingClientRect().width || canvas.clientWidth || 600));
+  const cssH = 170;
+  const dpr = window.devicePixelRatio || 1;
+  const targetW = Math.round(cssW*dpr), targetH = Math.round(cssH*dpr);
+  if (canvas.width !== targetW || canvas.height !== targetH){
+    canvas.width = targetW;
+    canvas.height = targetH;
+  }
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cssW,cssH);
+
+  const shiftNs = state.shiftMs * 1e6;
+  const rangeStartAbs = state.windowStartSec*1e9 + state.epoch;
+  const rangeEndAbs = (state.windowStartSec+state.windowWidthSec)*1e9 + state.epoch;
+
+  let decA = {out:[], gMin:Infinity, gMax:-Infinity};
+  let decB = {out:[], gMin:Infinity, gMax:-Infinity};
+  if (state.fileA && state.fileA.values[name]){
+    decA = decimate(state.fileA.ts, state.fileA.n, state.fileA.values[name], rangeStartAbs, rangeEndAbs, cssW);
+  }
+  if (state.fileB && state.fileB.values[name]){
+    // B's raw-time window is shifted so that after applying +shiftNs it lands in [rangeStartAbs,rangeEndAbs)
+    decB = decimate(state.fileB.ts, state.fileB.n, state.fileB.values[name], rangeStartAbs-shiftNs, rangeEndAbs-shiftNs, cssW);
+  }
+
+  let gMin = Math.min(decA.gMin, decB.gMin);
+  let gMax = Math.max(decA.gMax, decB.gMax);
+  if (!isFinite(gMin) || !isFinite(gMax)){ gMin=-100; gMax=100; }
+  if (gMin === gMax){ gMin -= 1; gMax += 1; }
+  const pad = (gMax-gMin)*0.08;
+  gMin -= pad; gMax += pad;
+
+  const plotTop = 8, plotBottom = cssH - 22, plotH = plotBottom-plotTop;
+  const valueToY = v => plotBottom - ((v-gMin)/(gMax-gMin))*plotH;
+
+  // grid + zero line
+  ctx.strokeStyle = getCss('--grid'); ctx.lineWidth = 1;
+  ctx.font = '10px Consolas, "Courier New", monospace';
+  ctx.fillStyle = getCss('--caption');
+  const step = niceTickStep(state.windowWidthSec, 8);
+  const firstTick = Math.ceil(state.windowStartSec/step)*step;
+  for (let t = firstTick; t <= state.windowStartSec+state.windowWidthSec; t += step){
+    const x = Math.round(((t-state.windowStartSec)/state.windowWidthSec)*cssW) + 0.5;
+    ctx.beginPath(); ctx.moveTo(x, plotTop); ctx.lineTo(x, plotBottom); ctx.stroke();
+    ctx.fillText(fmtTime(t), Math.min(cssW-44, Math.max(4,x+3)), cssH-7);
+  }
+  if (gMin < 0 && gMax > 0){
+    ctx.save();
+    ctx.strokeStyle = getCss('--zero');
+    ctx.setLineDash([3,3]);
+    const y0 = Math.round(valueToY(0)) + 0.5;
+    ctx.beginPath(); ctx.moveTo(0,y0); ctx.lineTo(cssW,y0); ctx.stroke();
+    ctx.restore();
+  }
+  // baseline separator above time axis
+  ctx.strokeStyle = getCss('--border');
+  ctx.beginPath(); ctx.moveTo(0, plotBottom + 0.5); ctx.lineTo(cssW, plotBottom + 0.5); ctx.stroke();
+
+  // y-axis min/max labels
+  ctx.fillStyle = getCss('--muted');
+  ctx.fillText(gMax.toFixed(0)+'µV', 6, plotTop+10);
+  ctx.fillText(gMin.toFixed(0)+'µV', 6, plotBottom-4);
+
+  drawSeries(ctx, decA.out, valueToY, cssW, COLOR_A);
+  drawSeries(ctx, decB.out, valueToY, cssW, COLOR_B);
+
+  // click-placed cursor
+  if (state.cursor){
+    const tSec = state.cursor.tSec;
+    if (tSec >= state.windowStartSec && tSec <= state.windowStartSec + state.windowWidthSec){
+      const x = ((tSec - state.windowStartSec) / state.windowWidthSec) * cssW;
+      ctx.save();
+      ctx.strokeStyle = getCss('--text');
+      ctx.setLineDash([4,3]);
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x+0.5, 0); ctx.lineTo(x+0.5, plotBottom); ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // correlation
+  if (state.fileA && state.fileB && state.fileA.values[name] && state.fileB.values[name]){
+    const {r, n} = computeCorrelation(state.fileA, name, state.fileB, name, shiftNs, rangeStartAbs, rangeEndAbs, state.toleranceNs);
+    c.corrEl.className = (!Number.isNaN(r) && r >= 0.9) ? 'corr corr-good' : 'corr';
+    c.corrEl.innerHTML = Number.isNaN(r)
+      ? `r=n/a (n=${n})`
+      : `r=<b>${r.toFixed(3)}</b> (n=${n}, shift=${state.shiftMs}ms)`;
+  } else {
+    c.corrEl.className = 'corr';
+    c.corrEl.textContent = 'load both files to correlate';
+  }
+}
+
+function drawSeries(ctx, out, valueToY, cssW, color){
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  // min/max envelope
+  ctx.globalAlpha = 0.35;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x=0; x<out.length; x++){
+    const b = out[x];
+    if (!b) continue;
+    ctx.moveTo(x+0.5, valueToY(b.min));
+    ctx.lineTo(x+0.5, valueToY(b.max));
+  }
+  ctx.stroke();
+  // mean connecting line
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  let started = false;
+  for (let x=0; x<out.length; x++){
+    const b = out[x];
+    if (!b){ started = false; continue; }
+    const y = valueToY(b.mean);
+    if (!started){ ctx.moveTo(x+0.5, y); started = true; }
+    else ctx.lineTo(x+0.5, y);
+  }
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+function getCss(varName){
+  if (cssThemeCache && cssThemeCache[varName] !== undefined) return cssThemeCache[varName];
+  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || '#888';
+}
+
+window.addEventListener('resize', scheduleRender);
+
+/* ---------- expose internals for headless testing ---------- */
+window.__EV = {parseCSV, computeCorrelation, decimate, lowerBound, state, fmtAbsTs, fmtTime, nearestIndex, setCursor, updateCursorPanel};
+
+setStatus('Load File A and File B to begin.');
+</script>
+</body>
+</html>

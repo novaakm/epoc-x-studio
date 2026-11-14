@@ -1,0 +1,2990 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D BRAIN VIEWER</title>
+  <style>
+    :root {
+      --bg: #030508;
+      --card-bg: rgba(8, 14, 24, 0.88);
+      --border: rgba(40, 60, 95, 0.4);
+      --border-bright: rgba(80, 130, 200, 0.6);
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --accent: #38bdf8;
+      --alpha-color: #a855f7;
+      --beta-color: #22c55e;
+      --theta-color: #facc15;
+      --gamma-color: #ec4899;
+      --delta-color: #ef4444;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: var(--text);
+      user-select: none;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+
+    /* Holographic UI Overlay */
+    .hud {
+      position: absolute;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .interactive {
+      pointer-events: auto;
+    }
+
+    /* Top-Right Status Badge */
+    .status-badge.hud {
+      top: 24px;
+      right: 24px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      transition: transform 0.38s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.28s ease;
+      will-change: transform, opacity;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #e2e8f0;
+      transition: background 0.2s;
+    }
+    .status-dot.online { background: #22c55e; }
+    .status-dot.paused { background: #eab308; }
+    .status-dot.idle { background: #94a3b8; }
+    .status-dot.artifact { background: #eab308; }
+    .status-dot.offline { background: #ef4444; }
+
+    /* Left Control Sidebar */
+    .sidebar.hud {
+      top: 24px;
+      left: 24px;
+      width: 280px;
+      max-height: calc(100vh - 48px);
+      padding-bottom: 2px;
+      overflow-y: auto;
+      scrollbar-width: none;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      transition: transform 0.38s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.28s ease;
+      will-change: transform, opacity;
+    }
+    .sidebar.hud::-webkit-scrollbar {
+      display: none;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      contain: layout style;
+      transition: border-color 0.2s;
+    }
+    .card:hover {
+      border-color: var(--border-bright);
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Wave Band Selectors */
+    .band-pills {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .band-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-start;
+      width: 100%;
+      text-align: left;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(50, 70, 100, 0.3);
+      padding: 7px 10px;
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s, opacity 0.2s;
+    }
+    .band-btn:hover {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(100, 150, 220, 0.5);
+    }
+    .band-btn.active {
+      border-color: currentColor;
+      background: rgba(30, 45, 75, 0.9);
+    }
+    .band-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+    .band-title-group {
+      display: flex;
+      align-items: center;
+    }
+    .band-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .band-chevron {
+      font-size: 9px;
+      color: var(--muted);
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s;
+      display: inline-block;
+      line-height: 1;
+    }
+    .band-btn.expanded .band-chevron {
+      transform: rotate(180deg);
+      color: currentColor;
+    }
+    .band-swatch {
+      display: inline-block;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      margin-right: 8px;
+      flex-shrink: 0;
+      cursor: pointer;
+      position: relative;
+      transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.2s ease, opacity 0.18s ease, background 0.2s ease;
+    }
+    .band-swatch::after {
+      content: "";
+      position: absolute;
+      top: -6px;
+      left: -6px;
+      right: -6px;
+      bottom: -6px;
+      border-radius: 50%;
+    }
+    .band-swatch:hover {
+      transform: scale(1.35);
+      filter: brightness(1.25);
+    }
+    .band-swatch:active {
+      transform: scale(0.92);
+    }
+    .band-btn[data-band="all"] .band-swatch {
+      cursor: default;
+    }
+    .band-btn[data-band="all"] .band-swatch:hover {
+      transform: none;
+      filter: none;
+    }
+    .band-btn.band-disabled {
+      filter: grayscale(100%);
+      opacity: 0.42;
+      border-color: rgba(75, 85, 99, 0.3) !important;
+      box-shadow: none !important;
+    }
+    .band-btn.band-disabled:hover {
+      opacity: 0.72;
+      border-color: rgba(148, 163, 184, 0.35) !important;
+    }
+    .band-btn.band-disabled .band-swatch {
+      background: #64748b !important;
+      box-shadow: none !important;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+    }
+    .band-btn.band-disabled .band-swatch:hover {
+      transform: scale(1.35);
+      background: #94a3b8 !important;
+      filter: brightness(1.3);
+    }
+    .band-val {
+      font-family: monospace;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .band-graph-wrap {
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      margin-top: 0;
+      transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+                  opacity 0.22s ease,
+                  margin-top 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+      pointer-events: none;
+    }
+    .band-btn.expanded .band-graph-wrap {
+      max-height: 76px;
+      opacity: 1;
+      margin-top: 8px;
+    }
+    .band-graph-box {
+      background: rgba(4, 8, 16, 0.82);
+      border: 1px solid rgba(56, 189, 248, 0.18);
+      border-radius: 6px;
+      padding: 5px 7px 6px 7px;
+      contain: layout style;
+    }
+    .band-btn.active .band-graph-box {
+      border-color: rgba(148, 163, 184, 0.28);
+    }
+    .band-svg {
+      display: block;
+      width: 100%;
+      height: 54px;
+      border-radius: 3px;
+      overflow: visible;
+      transform: translateZ(0);
+      contain: layout style;
+    }
+
+    /* Metrics Grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .metric-box {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(50, 70, 100, 0.2);
+      border-radius: 6px;
+      padding: 8px;
+      text-align: center;
+    }
+    .metric-num {
+      font-size: 18px;
+      font-weight: 700;
+      color: #38bdf8;
+      font-family: monospace;
+    }
+    .metric-lbl {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* Sliders & Toggles */
+    .control-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+    .control-row label {
+      color: var(--text);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    input[type=range] {
+      flex: 1;
+      min-width: 68px;
+      max-width: 110px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .btn-action {
+      width: 100%;
+      padding: 8px 6px;
+      background: rgba(56, 189, 248, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      border-radius: 6px;
+      color: #38bdf8;
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-action:hover {
+      background: rgba(56, 189, 248, 0.3);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+    }
+    .btn-action.paused {
+      background: rgba(234, 179, 8, 0.18);
+      border-color: rgba(234, 179, 8, 0.6);
+      color: #eab308;
+      box-shadow: 0 0 12px rgba(234, 179, 8, 0.25);
+    }
+    .btn-action.paused:hover {
+      background: rgba(234, 179, 8, 0.3);
+      box-shadow: 0 0 16px rgba(234, 179, 8, 0.45);
+    }
+    .btn-action.idle {
+      background: rgba(34, 197, 94, 0.18);
+      border-color: rgba(34, 197, 94, 0.6);
+      color: #4ade80;
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.22);
+    }
+    .btn-action.idle:hover {
+      background: rgba(34, 197, 94, 0.3);
+      box-shadow: 0 0 16px rgba(34, 197, 94, 0.4);
+    }
+    .playback-progress-bg {
+      position: relative;
+      width: 100%;
+      height: 6px;
+      background: rgba(30, 41, 59, 0.85);
+      border-radius: 3px;
+      margin: 14px 0 14px 0;
+      cursor: pointer;
+      touch-action: none;
+    }
+    .playback-progress-bg::before {
+      content: "";
+      position: absolute;
+      top: -8px;
+      bottom: -8px;
+      left: 0;
+      right: 0;
+      cursor: pointer;
+    }
+    .playback-progress-fill {
+      position: relative;
+      height: 100%;
+      width: 100%;
+      transform-origin: left center;
+      transform: scaleX(0);
+      will-change: transform;
+      background: var(--accent);
+      border-radius: 3px;
+      pointer-events: none;
+    }
+    .playback-progress-thumb {
+      position: absolute;
+      left: 0;
+      top: 50%;
+      margin-left: -7px;
+      transform: translate3d(var(--thumb-x, 0px), -50%, 0);
+      will-change: transform;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #f8fafc;
+      border: 2px solid var(--accent);
+      cursor: pointer;
+      pointer-events: auto;
+    }
+    .playback-progress-bg:hover .playback-progress-thumb,
+    .playback-progress-bg.scrubbing .playback-progress-thumb {
+      transform: translate3d(var(--thumb-x, 0px), -50%, 0) scale(1.25);
+    }
+
+    /* Right Control Sidebar */
+    .inspector.hud {
+      top: 68px;
+      right: 24px;
+      width: 280px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      transition: transform 0.38s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.28s ease;
+      will-change: transform, opacity;
+    }
+
+    /* Fullscreen & Narrow Window Auto-Hide Mode */
+    body.fullscreen-mode .status-badge.hud {
+      transform: translateX(calc(100% + 32px));
+      opacity: 0;
+      pointer-events: none;
+    }
+    body.fullscreen-mode .status-badge.hud.revealed {
+      transform: translateX(0);
+      opacity: 1;
+      pointer-events: auto;
+      z-index: 30;
+    }
+
+    body.fullscreen-mode .sidebar.hud,
+    body.narrow-mode .sidebar.hud {
+      transform: translateX(calc(-100% - 32px));
+      opacity: 0;
+      pointer-events: none;
+    }
+    body.fullscreen-mode .sidebar.hud.revealed,
+    body.narrow-mode .sidebar.hud.revealed {
+      transform: translateX(0);
+      opacity: 1;
+      pointer-events: auto;
+      z-index: 30;
+    }
+
+    body.fullscreen-mode .inspector.hud,
+    body.narrow-mode .inspector.hud {
+      transform: translateX(calc(100% + 32px));
+      opacity: 0;
+      pointer-events: none;
+    }
+    body.fullscreen-mode .inspector.hud.revealed,
+    body.narrow-mode .inspector.hud.revealed {
+      transform: translateX(0);
+      opacity: 1;
+      pointer-events: auto;
+      z-index: 30;
+    }
+
+    /* Edge Hover Trigger Hitboxes */
+    .edge-trigger {
+      display: none;
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      width: 28px;
+      z-index: 25;
+      pointer-events: auto;
+    }
+    body.fullscreen-mode .edge-trigger,
+    body.narrow-mode .edge-trigger {
+      display: block;
+    }
+    .edge-trigger-left {
+      left: 0;
+    }
+    .edge-trigger-right {
+      right: 0;
+    }
+
+    /* Active state for fullscreen button */
+    .btn-action.fullscreen-active {
+      background: rgba(56, 189, 248, 0.32);
+      border-color: #38bdf8;
+    }
+
+    /* Floating Tooltip */
+    #tooltip {
+      position: absolute;
+      left: 0;
+      top: 0;
+      display: none;
+      pointer-events: none;
+      z-index: 50;
+      background: rgba(3, 7, 18, 0.94);
+      border: 1px solid var(--accent);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      will-change: transform;
+      contain: layout style paint;
+      transform: translate(-50%, -120%);
+    }
+  </style>
+  <!-- Load Three.js, OrbitControls, and GLTFLoader (vendored locally for offline desktop use) -->
+  <script src="/vendor/three/three.min.js"></script>
+  <script src="/vendor/three/OrbitControls.js"></script>
+  <script src="/vendor/three/GLTFLoader.js"></script>
+  <!-- Post-processing for UnrealBloom (Glow) -->
+  <script src="/vendor/three/EffectComposer.js"></script>
+  <script src="/vendor/three/RenderPass.js"></script>
+  <script src="/vendor/three/ShaderPass.js"></script>
+  <script src="/vendor/three/CopyShader.js"></script>
+  <script src="/vendor/three/LuminosityHighPassShader.js"></script>
+  <script src="/vendor/three/UnrealBloomPass.js"></script>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+  <div id="tooltip"></div>
+  <div id="edgeTriggerLeft" class="edge-trigger edge-trigger-left" aria-hidden="true"></div>
+  <div id="edgeTriggerRight" class="edge-trigger edge-trigger-right" aria-hidden="true"></div>
+
+  <!-- Top-Right Status Badge -->
+  <div class="status-badge hud">
+    <div id="statusDot" class="status-dot"></div>
+    <span id="statusText">CONNECTING...</span>
+    <span id="fpsCounter" style="color:var(--muted); margin-left:6px; font-family:monospace;">-- FPS</span>
+  </div>
+
+  <!-- Left Control Sidebar -->
+  <aside class="sidebar hud interactive">
+    <!-- Wave Band Inspector & Selector -->
+    <div class="card">
+      <div class="card-title">
+        <span>Brain Waves</span>
+        <span style="font-size:9px; color:var(--muted)">TARGET BAND</span>
+      </div>
+      <div class="band-pills">
+        <button class="band-btn active expanded" data-band="all" style="color:#f8fafc">
+          <div class="band-header">
+            <div class="band-title-group"><span class="band-swatch" style="background:#f8fafc;"></span>All Bands (Dominant)</div>
+            <div class="band-meta">
+              <span class="band-val">AUTO</span>
+              <span class="band-chevron">▾</span>
+            </div>
+          </div>
+          <div class="band-graph-wrap">
+            <div class="band-graph-box">
+              <svg class="band-svg" data-svg-band="all" viewBox="0 0 210 54" preserveAspectRatio="none"></svg>
+            </div>
+          </div>
+        </button>
+        <button class="band-btn" data-band="alpha" style="color:var(--alpha-color)">
+          <div class="band-header">
+            <div class="band-title-group"><span class="band-swatch" style="background:var(--alpha-color);"></span>Alpha (8-12 Hz)</div>
+            <div class="band-meta">
+              <span class="band-val" id="valAlpha">0%</span>
+              <span class="band-chevron">▾</span>
+            </div>
+          </div>
+          <div class="band-graph-wrap">
+            <div class="band-graph-box">
+              <svg class="band-svg" data-svg-band="alpha" viewBox="0 0 210 54" preserveAspectRatio="none"></svg>
+            </div>
+          </div>
+        </button>
+        <button class="band-btn" data-band="beta" style="color:var(--beta-color)">
+          <div class="band-header">
+            <div class="band-title-group"><span class="band-swatch" style="background:var(--beta-color);"></span>Beta (12-30 Hz)</div>
+            <div class="band-meta">
+              <span class="band-val" id="valBeta">0%</span>
+              <span class="band-chevron">▾</span>
+            </div>
+          </div>
+          <div class="band-graph-wrap">
+            <div class="band-graph-box">
+              <svg class="band-svg" data-svg-band="beta" viewBox="0 0 210 54" preserveAspectRatio="none"></svg>
+            </div>
+          </div>
+        </button>
+        <button class="band-btn" data-band="theta" style="color:var(--theta-color)">
+          <div class="band-header">
+            <div class="band-title-group"><span class="band-swatch" style="background:var(--theta-color);"></span>Theta (4-8 Hz)</div>
+            <div class="band-meta">
+              <span class="band-val" id="valTheta">0%</span>
+              <span class="band-chevron">▾</span>
+            </div>
+          </div>
+          <div class="band-graph-wrap">
+            <div class="band-graph-box">
+              <svg class="band-svg" data-svg-band="theta" viewBox="0 0 210 54" preserveAspectRatio="none"></svg>
+            </div>
+          </div>
+        </button>
+        <button class="band-btn" data-band="gamma" style="color:var(--gamma-color)">
+          <div class="band-header">
+            <div class="band-title-group"><span class="band-swatch" style="background:var(--gamma-color);"></span>Gamma (30-45 Hz)</div>
+            <div class="band-meta">
+              <span class="band-val" id="valGamma">0%</span>
+              <span class="band-chevron">▾</span>
+            </div>
+          </div>
+          <div class="band-graph-wrap">
+            <div class="band-graph-box">
+              <svg class="band-svg" data-svg-band="gamma" viewBox="0 0 210 54" preserveAspectRatio="none"></svg>
+            </div>
+          </div>
+        </button>
+        <button class="band-btn" data-band="delta" style="color:var(--delta-color)">
+          <div class="band-header">
+            <div class="band-title-group"><span class="band-swatch" style="background:var(--delta-color);"></span>Delta (1-4 Hz)</div>
+            <div class="band-meta">
+              <span class="band-val" id="valDelta">0%</span>
+              <span class="band-chevron">▾</span>
+            </div>
+          </div>
+          <div class="band-graph-wrap">
+            <div class="band-graph-box">
+              <svg class="band-svg" data-svg-band="delta" viewBox="0 0 210 54" preserveAspectRatio="none"></svg>
+            </div>
+          </div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Real-time Cognitive State Metrics -->
+    <div class="card">
+      <div class="card-title">Live Cognitive Indices</div>
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <div class="metric-num" id="metricAlphaProm">--</div>
+          <div class="metric-lbl">Alpha Relaxation</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-num" id="metricEngagement">--</div>
+          <div class="metric-lbl">Engagement Beta/(α+θ)</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Right Control Sidebar -->
+  <aside class="inspector hud interactive">
+    <!-- Session Playback -->
+    <div class="card">
+      <div class="card-title">
+        <span>Session Playback</span>
+        <span id="playbackModeLabel" style="font-size:9px; color:var(--muted)">REPLAY</span>
+      </div>
+      <div class="metric-box" style="padding:8px 10px;">
+        <div class="metric-num" id="playbackElapsed" style="font-size:15px;">00:00.0</div>
+        <div class="metric-lbl" id="playbackTimestamp" style="font-family:monospace; text-transform:none; letter-spacing:0.02em; margin-top:4px; font-size:10px; color:#94a3b8;">--</div>
+      </div>
+      <div class="playback-progress-bg" id="playbackProgressBar" title="Drag or click to seek through recording">
+        <div class="playback-progress-fill" id="playbackProgress"></div>
+        <div class="playback-progress-thumb" id="playbackProgressThumb"></div>
+      </div>
+      <button id="btnPause" class="btn-action">⏸ Pause Recording</button>
+    </div>
+
+    <!-- Visual Adjustments -->
+    <div class="card">
+      <div class="card-title">Visual Controls</div>
+      <div class="control-row">
+        <label>Zoom <span id="zoomValue" style="color:var(--muted); font-family:monospace; margin-left:4px;">100%</span></label>
+        <input type="range" id="zoomSlider" min="0" max="100" step="1" value="50">
+      </div>
+      <div class="control-row">
+        <label>Glow Bloom</label>
+        <input type="range" id="bloomSlider" min="0" max="1.40" step="0.01" value="0.70">
+      </div>
+      <div class="control-row">
+        <label>Outline Opacity</label>
+        <input type="range" id="outlineSlider" min="0.05" max="0.8" step="0.05" value="0.3">
+      </div>
+      <div class="control-row">
+        <label>Auto-Rotation</label>
+        <input type="checkbox" id="autoRotateCheck" checked style="accent-color:var(--accent); cursor:pointer;">
+      </div>
+      <button id="btnCalibrate" class="btn-action" style="margin-top:6px;">Calibrate 5s Baseline</button>
+      <button id="btnFullscreen" class="btn-action" style="margin-top:6px;">⛶ Fullscreen</button>
+    </div>
+  </aside>
+
+  <!-- 3D WebGL / Three.js Application Logic -->
+  <script>
+    // -------------------------------------------------------------------------
+    // Global Constants & State
+    // -------------------------------------------------------------------------
+    const BAND_COLORS = {
+      delta: 0xef4444,
+      theta: 0xfacc15,
+      alpha: 0xa855f7,
+      beta:  0x22c55e,
+      gamma: 0xec4899
+    };
+
+    const INACTIVE_COLOR = 0x070d18;
+    const INACTIVE_EDGE = 0x243b5e;
+    const INACTIVE_COLOR_OBJ = new THREE.Color(INACTIVE_COLOR);
+    const INACTIVE_EDGE_OBJ = new THREE.Color(INACTIVE_EDGE);
+
+    const currentOutlineColor = new THREE.Color(INACTIVE_EDGE);
+    const targetOutlineColor = new THREE.Color(INACTIVE_EDGE);
+
+    // 8 Bilateral Active Cortical Regions + 2 Interpolated Parietal Regions
+    const LOBE_CONFIG = {
+      dorsal_frontal_left:  { label: "Dorsal Frontal L",  channels: ["AF3", "F3"], center: [ 0.42, 1.22,  0.79], radii: [0.65, 0.85, 1.25], rot: [0.1,  0.2, 0] },
+      dorsal_frontal_right: { label: "Dorsal Frontal R",  channels: ["AF4", "F4"], center: [-0.42, 1.22,  0.80], radii: [0.65, 0.85, 1.25], rot: [0.1, -0.2, 0] },
+      ventral_frontal_left: { label: "Ventral Frontal L", channels: ["F7", "FC5"], center: [ 0.90, 0.71,  0.86], radii: [0.50, 0.65, 0.68], rot: [0.05, 0.1, 0] },
+      ventral_frontal_right:{ label: "Ventral Frontal R", channels: ["F8", "FC6"], center: [-0.91, 0.71,  0.87], radii: [0.50, 0.65, 0.68], rot: [0.05,-0.1, 0] },
+      temporal_left:        { label: "Temporal L",        channels: ["T7", "P7"],  center: [ 0.96, 0.18, -0.28], radii: [0.65, 0.95, 1.40], rot: [-0.1, 0.1, 0.2] },
+      temporal_right:       { label: "Temporal R",        channels: ["T8", "P8"],  center: [-0.95, 0.16, -0.26], radii: [0.65, 0.95, 1.40], rot: [-0.1,-0.1,-0.2] },
+      occipital_left:       { label: "Occipital L",       channels: ["O1"],        center: [ 0.40, 0.03, -1.38], radii: [0.55, 0.60, 0.68], rot: [-0.2,-0.2, 0] },
+      occipital_right:      { label: "Occipital R",       channels: ["O2"],        center: [-0.40, 0.03, -1.38], radii: [0.55, 0.60, 0.68], rot: [-0.2, 0.2, 0] },
+      parietal_left:        { label: "Parietal L",        channels: ["--"],        interpolatedFrom: ["dorsal_frontal_left", "ventral_frontal_left", "temporal_left", "occipital_left"], center: [ 0.64, 1.05, -0.70], radii: [0.75, 0.90, 1.00], rot: [0, 0, 0] },
+      parietal_right:       { label: "Parietal R",        channels: ["--"],        interpolatedFrom: ["dorsal_frontal_right", "ventral_frontal_right", "temporal_right", "occipital_right"], center: [-0.64, 1.05, -0.70], radii: [0.75, 0.90, 1.00], rot: [0, 0, 0] },
+    };
+
+    let selectedBandMode = "all"; // "all", "alpha", "beta", "theta", "gamma", "delta"
+    let currentEEGData = null;
+    let bloomPass = null;
+    const lobeMeshes = {};
+    const lobeEdges = {};
+    let lobeKeys = [];
+    let lobeMeshList = [];
+    let needsRenderOrderSort = true;
+    const lastSortCamPos = new THREE.Vector3(Infinity, Infinity, Infinity);
+    const noncorticalEdges = [];
+    let isOrbitDragging = false;
+    let cachedOutlineOpacity = parseFloat(document.getElementById("outlineSlider").value);
+    if (isNaN(cachedOutlineOpacity)) cachedOutlineOpacity = 0.3;
+
+    // -------------------------------------------------------------------------
+    // Three.js Scene, Camera, Renderer & Post-Processing Setup
+    // -------------------------------------------------------------------------
+    const container = document.getElementById("canvas-container");
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x030508);
+    scene.fog = new THREE.FogExp2(0x030508, 0.08);
+
+    const DEFAULT_CAMERA_POS = new THREE.Vector3(-5.22, 3.4, 0);
+    const DEFAULT_CAMERA_DISTANCE = DEFAULT_CAMERA_POS.length();
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.copy(DEFAULT_CAMERA_POS);
+
+    const isQtWebEngine = /QtWebEngine/i.test(navigator.userAgent);
+    // Render at full native DPI (capped at 1.5x for >QHD displays); shader/scene optimizations
+    // offset the pixel fill cost so the grid, outlines, and brain stay razor-sharp.
+    function computeRenderDpr() {
+      const nativeDpr = window.devicePixelRatio || 1;
+      return Math.min(nativeDpr, 1.5);
+    }
+    let renderDpr = computeRenderDpr();
+    const renderer = new THREE.WebGLRenderer({ antialias: !isQtWebEngine, powerPreference: "high-performance" });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(renderDpr);
+    renderer.toneMapping = THREE.ReinhardToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.autoRotate = document.getElementById("autoRotateCheck").checked;
+    controls.autoRotateSpeed = 0.8;
+    controls.maxDistance = 12.5;
+    controls.minDistance = 2;
+
+    // Brain bounds & zoom tracking
+    let brainHalfWidthWorld = 1.925;
+    const _zoomOffsetVec = new THREE.Vector3();
+    let lastCheckedZoomDist = -1;
+    const lastCheckedTarget = new THREE.Vector3(Infinity, Infinity, Infinity);
+
+    // Lighting (Key-to-fill contrast so gyri & sulci stay sculpted while preserving the dark look)
+    const ambientLight = new THREE.HemisphereLight(0xe2e8f0, 0x090f1d, 0.42);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xf8fafc, 1.15);
+    dirLight.position.set(5, 10, 7);
+    scene.add(dirLight);
+
+    const fillLight = new THREE.DirectionalLight(0x64748b, 0.35);
+    fillLight.position.set(-6, -3, -5);
+    scene.add(fillLight);
+
+    // UnrealBloom Glow Post-Processing
+    // On QtWebEngine, skip 64-bit HalfFloat FBOs and run the bloom mip chain at quarter resolution.
+    const renderPass = new THREE.RenderPass(scene, camera);
+    const initialBloomStrength = parseFloat(document.getElementById("bloomSlider").value);
+    const bloomScale = isQtWebEngine ? 0.25 : 1.0;
+    bloomPass = new THREE.UnrealBloomPass(
+      new THREE.Vector2(
+        Math.max(1, Math.floor(window.innerWidth * bloomScale)),
+        Math.max(1, Math.floor(window.innerHeight * bloomScale))
+      ),
+      isNaN(initialBloomStrength) ? 0.70 : initialBloomStrength, // Strength
+      0.55, // Radius
+      0.28  // Threshold (high enough to keep dark lobes/outlines crisp, low enough for all bands to bloom)
+    );
+    const origBloomSetSize = bloomPass.setSize.bind(bloomPass);
+    bloomPass.setSize = (w, h) => {
+      origBloomSetSize(
+        Math.max(1, Math.floor(w * bloomScale)),
+        Math.max(1, Math.floor(h * bloomScale))
+      );
+    };
+    const canHalfFloat = !isQtWebEngine && renderer.capabilities.isWebGL2 && (
+      renderer.extensions.get("EXT_color_buffer_float") ||
+      renderer.extensions.get("EXT_color_buffer_half_float")
+    );
+    const composerTarget = canHalfFloat
+      ? new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+          type: THREE.HalfFloatType,
+          minFilter: THREE.LinearFilter,
+          magFilter: THREE.LinearFilter,
+          format: THREE.RGBAFormat,
+        })
+      : undefined;
+    const composer = new THREE.EffectComposer(renderer, composerTarget);
+    composer.setPixelRatio(renderDpr);
+    composer.addPass(renderPass);
+    composer.addPass(bloomPass);
+    bloomPass.setSize(window.innerWidth * renderDpr, window.innerHeight * renderDpr);
+
+    // Cyberpunk Pedestal Grid
+    const gridHelper = new THREE.GridHelper(10, 20, 0x1e293b, 0x09101d);
+    gridHelper.position.y = -2.2;
+    scene.add(gridHelper);
+
+    // Subtle Particle Dust Field in the Void
+    const particleCount = 200;
+    const pGeo = new THREE.BufferGeometry();
+    const pPos = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount * 3; i += 3) {
+      pPos[i] = (Math.random() - 0.5) * 15;
+      pPos[i + 1] = (Math.random() - 0.5) * 10;
+      pPos[i + 2] = (Math.random() - 0.5) * 15;
+    }
+    pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
+    const pMat = new THREE.PointsMaterial({ color: 0x38bdf8, size: 0.035, transparent: true, opacity: 0.4, depthWrite: false });
+    const particles = new THREE.Points(pGeo, pMat);
+    particles.renderOrder = 0;
+    scene.add(particles);
+
+    // -------------------------------------------------------------------------
+    // Anatomical 3D Brain Mesh Construction (Segmented BodyParts3D Atlas GLB)
+    // -------------------------------------------------------------------------
+    const brainGroup = new THREE.Group();
+    scene.add(brainGroup);
+
+    // Build a watertight vertex-clustered BufferGeometry for fast hover raycasting
+    // or simplifying opaque inner occluders without gaps.
+    function decimateGeometryByGrid(geo, gridSize = 7, minTriCount = 350) {
+      const posAttr = geo && geo.attributes && geo.attributes.position;
+      if (!posAttr) return null;
+      const index = geo.index;
+      const triCount = Math.floor((index ? index.count : posAttr.count) / 3);
+      if (triCount <= minTriCount) return null;
+
+      if (!geo.boundingBox) geo.computeBoundingBox();
+      const box = geo.boundingBox;
+      const sx = Math.max(1e-6, box.max.x - box.min.x);
+      const sy = Math.max(1e-6, box.max.y - box.min.y);
+      const sz = Math.max(1e-6, box.max.z - box.min.z);
+      const invX = (gridSize - 1) / sx;
+      const invY = (gridSize - 1) / sy;
+      const invZ = (gridSize - 1) / sz;
+
+      const vCount = posAttr.count;
+      const vertCluster = new Int32Array(vCount);
+      const cellToCluster = new Map();
+      const sumX = [], sumY = [], sumZ = [], counts = [];
+
+      for (let v = 0; v < vCount; v++) {
+        const vx = posAttr.getX(v);
+        const vy = posAttr.getY(v);
+        const vz = posAttr.getZ(v);
+        const ix = Math.max(0, Math.min(gridSize - 1, ((vx - box.min.x) * invX) | 0));
+        const iy = Math.max(0, Math.min(gridSize - 1, ((vy - box.min.y) * invY) | 0));
+        const iz = Math.max(0, Math.min(gridSize - 1, ((vz - box.min.z) * invZ) | 0));
+        const key = (ix * gridSize + iy) * gridSize + iz;
+        let cid = cellToCluster.get(key);
+        if (cid === undefined) {
+          cid = sumX.length;
+          cellToCluster.set(key, cid);
+          sumX.push(0); sumY.push(0); sumZ.push(0); counts.push(0);
+        }
+        vertCluster[v] = cid;
+        sumX[cid] += vx;
+        sumY[cid] += vy;
+        sumZ[cid] += vz;
+        counts[cid]++;
+      }
+
+      const cCount = sumX.length;
+      const clusteredPos = new Float32Array(cCount * 3);
+      for (let c = 0; c < cCount; c++) {
+        const inv = 1 / counts[c];
+        clusteredPos[c * 3] = sumX[c] * inv;
+        clusteredPos[c * 3 + 1] = sumY[c] * inv;
+        clusteredPos[c * 3 + 2] = sumZ[c] * inv;
+      }
+
+      const indices = [];
+      const seenTris = new Set();
+      const stride = Math.max(1, cCount);
+      for (let t = 0; t < triCount; t++) {
+        const base = t * 3;
+        const c0 = vertCluster[index ? index.getX(base) : base];
+        const c1 = vertCluster[index ? index.getX(base + 1) : base + 1];
+        const c2 = vertCluster[index ? index.getX(base + 2) : base + 2];
+        if (c0 === c1 || c1 === c2 || c2 === c0) continue;
+        const triKey = (c0 * stride + c1) * stride + c2;
+        if (seenTris.has(triKey)) continue;
+        seenTris.add(triKey);
+        indices.push(c0, c1, c2);
+      }
+
+      if (indices.length < 12) return null;
+      const decGeo = new THREE.BufferGeometry();
+      decGeo.setAttribute("position", new THREE.BufferAttribute(clusteredPos, 3));
+      decGeo.setIndex(indices);
+      decGeo.computeBoundingBox();
+      decGeo.computeBoundingSphere();
+      return decGeo;
+    }
+
+    // Extracts ONLY the main anatomical outlines (major sulci creases and outward lobe contours),
+    // discarding the thousands of flat internal slice-cut edges running inside the brain core.
+    function createMainEdgesGeometry(geometry, thresholdDeg = 36) {
+      const pos = geometry.attributes.position;
+      const index = geometry.index;
+      if (!pos || !index) return new THREE.EdgesGeometry(geometry, thresholdDeg);
+
+      const cosThreshold = Math.cos(THREE.MathUtils.degToRad(thresholdDeg));
+      const numFaces = index.count / 3;
+
+      // Compute face normals
+      const fnorms = new Float32Array(numFaces * 3);
+      const pA = new THREE.Vector3(), pB = new THREE.Vector3(), pC = new THREE.Vector3();
+      const cb = new THREE.Vector3(), ab = new THREE.Vector3();
+
+      for (let i = 0; i < numFaces; i++) {
+        const i3 = i * 3;
+        const a = index.getX(i3), b = index.getX(i3 + 1), c = index.getX(i3 + 2);
+        pA.fromBufferAttribute(pos, a);
+        pB.fromBufferAttribute(pos, b);
+        pC.fromBufferAttribute(pos, c);
+        cb.subVectors(pC, pB);
+        ab.subVectors(pA, pB);
+        cb.cross(ab).normalize();
+        fnorms[i3] = cb.x;
+        fnorms[i3 + 1] = cb.y;
+        fnorms[i3 + 2] = cb.z;
+      }
+
+      // Build unique edge map
+      const edgeMap = new Map();
+      for (let i = 0; i < numFaces; i++) {
+        const i3 = i * 3;
+        const a = index.getX(i3), b = index.getX(i3 + 1), c = index.getX(i3 + 2);
+        const edges = [[a, b], [b, c], [c, a]];
+        for (const [v1, v2] of edges) {
+          const key = v1 < v2 ? `${v1}_${v2}` : `${v2}_${v1}`;
+          let e = edgeMap.get(key);
+          if (!e) {
+            edgeMap.set(key, { v1: Math.min(v1, v2), v2: Math.max(v1, v2), f1: i, f2: -1 });
+          } else {
+            e.f2 = i;
+          }
+        }
+      }
+
+      const linePositions = [];
+      const brainCenter = new THREE.Vector3(0, 0.4, 0);
+      const midpoint = new THREE.Vector3();
+      const radial = new THREE.Vector3();
+      const norm1 = new THREE.Vector3(), norm2 = new THREE.Vector3();
+
+      for (const e of edgeMap.values()) {
+        if (e.f2 !== -1) {
+          // Manifold edge: keep deep primary sulci creases
+          norm1.set(fnorms[e.f1 * 3], fnorms[e.f1 * 3 + 1], fnorms[e.f1 * 3 + 2]);
+          norm2.set(fnorms[e.f2 * 3], fnorms[e.f2 * 3 + 1], fnorms[e.f2 * 3 + 2]);
+          if (norm1.dot(norm2) <= cosThreshold) {
+            pA.fromBufferAttribute(pos, e.v1);
+            pB.fromBufferAttribute(pos, e.v2);
+            linePositions.push(pA.x, pA.y, pA.z, pB.x, pB.y, pB.z);
+          }
+        } else {
+          // Boundary edge: only include outward-facing outer perimeter contours;
+          // discard the hundreds of internal flat slice cuts that run through the inside of the brain
+          pA.fromBufferAttribute(pos, e.v1);
+          pB.fromBufferAttribute(pos, e.v2);
+          midpoint.addVectors(pA, pB).multiplyScalar(0.5);
+          radial.subVectors(midpoint, brainCenter).normalize();
+          norm1.set(fnorms[e.f1 * 3], fnorms[e.f1 * 3 + 1], fnorms[e.f1 * 3 + 2]);
+          if (radial.dot(norm1) > 0.4) {
+            linePositions.push(pA.x, pA.y, pA.z, pB.x, pB.y, pB.z);
+          }
+        }
+      }
+
+      const edgeGeo = new THREE.BufferGeometry();
+      edgeGeo.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));
+      return edgeGeo;
+    }
+
+    function sampleSurfacePoints(geo, cellSize = 0.055) {
+      const pos = geo && geo.attributes && geo.attributes.position;
+      if (!pos) return new Float32Array(0);
+      const invCell = 1.0 / cellSize;
+      const seen = new Set();
+      const pts = [];
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+        const ix = Math.round(x * invCell);
+        const iy = Math.round(y * invCell);
+        const iz = Math.round(z * invCell);
+        const key = `${ix}_${iy}_${iz}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          pts.push(x, y, z);
+        }
+      }
+      return new Float32Array(pts);
+    }
+
+    function computeCrownInterpolationWeights(crownMesh, neighborMeshes) {
+      const geo = crownMesh && crownMesh.geometry;
+      const pos = geo && geo.attributes && geo.attributes.position;
+      if (!pos || !neighborMeshes || neighborMeshes.length !== 4) return;
+
+      const neighborPts = neighborMeshes.map(m => sampleSurfacePoints(m && m.geometry, 0.055));
+      const weights = new Float32Array(pos.count * 4);
+      const eps = 0.04;
+      const power = 2.5;
+      const wTmp = [0, 0, 0, 0];
+
+      for (let v = 0; v < pos.count; v++) {
+        const vx = pos.getX(v), vy = pos.getY(v), vz = pos.getZ(v);
+        let wSum = 0.0;
+        for (let k = 0; k < 4; k++) {
+          const nArr = neighborPts[k];
+          let minSq = Infinity;
+          for (let j = 0; j < nArr.length; j += 3) {
+            const dx = vx - nArr[j];
+            const dy = vy - nArr[j + 1];
+            const dz = vz - nArr[j + 2];
+            const dSq = dx * dx + dy * dy + dz * dz;
+            if (dSq < minSq) minSq = dSq;
+          }
+          const d = Math.sqrt(minSq);
+          const wk = 1.0 / Math.pow(d + eps, power);
+          wTmp[k] = wk;
+          wSum += wk;
+        }
+        const inv = wSum > 1e-8 ? (1.0 / wSum) : 0.25;
+        const base = v * 4;
+        weights[base]     = wTmp[0] * inv;
+        weights[base + 1] = wTmp[1] * inv;
+        weights[base + 2] = wTmp[2] * inv;
+        weights[base + 3] = wTmp[3] * inv;
+      }
+
+      geo.setAttribute("regionWeights", new THREE.BufferAttribute(weights, 4));
+    }
+
+    const gltfLoader = new THREE.GLTFLoader();
+    gltfLoader.load(
+      "/brain_lobes.glb?v=4",
+      (gltf) => {
+        const initialOutlineOpacity = parseFloat(document.getElementById("outlineSlider").value) || 0.3;
+
+        gltf.scene.traverse((child) => {
+          if (!child.isMesh) return;
+          const key = child.name;
+          const geo = child.geometry;
+          geo.computeVertexNormals();
+          geo.computeBoundingSphere();
+
+          if (LOBE_CONFIG[key]) {
+            const conf = LOBE_CONFIG[key];
+            const centroid = geo.boundingSphere
+              ? geo.boundingSphere.center.clone()
+              : new THREE.Vector3(...conf.center);
+
+            // 1. Volumetric Matter Material (Blinn-Phong + Fresnel rim shader avoids heavy PBR BRDF cost
+            //    while keeping identical sculpted highlights and neon glow at native resolution)
+            const mat = new THREE.MeshPhongMaterial({
+              color: INACTIVE_COLOR,
+              emissive: new THREE.Color(0x000000),
+              emissiveIntensity: 0.0,
+              specular: 0x334155,
+              shininess: 38,
+              transparent: true,
+              opacity: 0.10,
+              depthWrite: false,
+            });
+
+            let interpUniforms = null;
+            if (conf.interpolatedFrom) {
+              interpUniforms = {
+                uNeighborColor0: { value: new THREE.Color(0x38bdf8) },
+                uNeighborColor1: { value: new THREE.Color(0x38bdf8) },
+                uNeighborColor2: { value: new THREE.Color(0x38bdf8) },
+                uNeighborColor3: { value: new THREE.Color(0x38bdf8) },
+                uNeighborActs:   { value: new THREE.Vector4(0, 0, 0, 0) },
+                uInactiveColor:  { value: INACTIVE_COLOR_OBJ },
+              };
+              mat.customProgramCacheKey = () => "parietal_interp_v1";
+              mat.onBeforeCompile = (shader) => {
+                Object.assign(shader.uniforms, interpUniforms);
+                shader.vertexShader = shader.vertexShader
+                  .replace(
+                    "#include <common>",
+                    `#include <common>
+                    attribute vec4 regionWeights;
+                    varying vec4 vRegionWeights;`
+                  )
+                  .replace(
+                    "#include <begin_vertex>",
+                    `#include <begin_vertex>
+                    vRegionWeights = regionWeights;`
+                  );
+                shader.fragmentShader = shader.fragmentShader
+                  .replace(
+                    "#include <common>",
+                    `#include <common>
+                    varying vec4 vRegionWeights;
+                    uniform vec3 uNeighborColor0;
+                    uniform vec3 uNeighborColor1;
+                    uniform vec3 uNeighborColor2;
+                    uniform vec3 uNeighborColor3;
+                    uniform vec4 uNeighborActs;
+                    uniform vec3 uInactiveColor;`
+                  )
+                  .replace(
+                    "vec4 diffuseColor = vec4( diffuse, opacity );",
+                    `
+                    vec4 rw = max(vRegionWeights, vec4(0.0));
+                    float rwSum = dot(rw, vec4(1.0));
+                    rw = rwSum > 1e-5 ? rw / rwSum : vec4(0.25);
+                    float interpAct = clamp(dot(rw, uNeighborActs), 0.0, 1.0);
+                    vec4 colorWeights = rw * (vec4(0.12) + uNeighborActs);
+                    float cwSum = dot(colorWeights, vec4(1.0));
+                    vec3 interpColor = (
+                      uNeighborColor0 * colorWeights.x +
+                      uNeighborColor1 * colorWeights.y +
+                      uNeighborColor2 * colorWeights.z +
+                      uNeighborColor3 * colorWeights.w
+                    ) / max(cwSum, 1e-4);
+                    float interpGlow = pow(max(interpAct, 0.0), 1.35);
+                    float interpDensity = pow(max(interpAct, 0.0), 0.6);
+                    float interpOpacity = 0.14 + interpDensity * 0.72;
+                    vec3 interpDiffuse = mix(uInactiveColor, interpColor, 0.15 + interpAct * 0.85);
+                    vec4 diffuseColor = vec4( interpDiffuse, interpOpacity );
+                    `
+                  )
+                  .replace(
+                    "vec3 totalEmissiveRadiance = emissive;",
+                    `
+                    // Preserve lit surface shading while giving interpolated crown contours a seamless Fresnel rim glow
+                    float viewDot = abs(dot(normalize(vNormal), normalize(vViewPosition)));
+                    float fresnel = pow(1.0 - viewDot, 2.2);
+                    float matterRim = 0.50 + 0.35 * viewDot + 0.65 * fresnel;
+                    vec3 interpEmissive = interpColor * (interpAct * 0.35 + interpGlow * 1.45);
+                    vec3 totalEmissiveRadiance = interpEmissive * matterRim;
+                    `
+                  );
+              };
+            } else {
+              mat.customProgramCacheKey = () => "active_lobe_rim_v1";
+              mat.onBeforeCompile = (shader) => {
+                shader.fragmentShader = shader.fragmentShader.replace(
+                  "vec3 totalEmissiveRadiance = emissive;",
+                  `
+                  // Preserve lit surface shading while giving active lobe contours a subtle Fresnel rim glow
+                  float viewDot = abs(dot(normalize(vNormal), normalize(vViewPosition)));
+                  float fresnel = pow(1.0 - viewDot, 2.2);
+                  float matterRim = 0.50 + 0.35 * viewDot + 0.65 * fresnel;
+                  vec3 totalEmissiveRadiance = emissive * matterRim;
+                  `
+                );
+              };
+            }
+
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.userData = {
+              regionKey: key,
+              config: conf,
+              centroid: centroid,
+              currentAct: 0.0,
+              targetAct: 0.0,
+              currentColor: new THREE.Color(0x38bdf8),
+              targetColor: new THREE.Color(0x38bdf8),
+              colorInitialized: false,
+              interpUniforms: interpUniforms,
+            };
+
+            // 2. Sharp, clean main outlines only (primary sulci fissures & outer contours)
+            const edgeGeo = createMainEdgesGeometry(geo, 36);
+            const edgeMat = new THREE.LineBasicMaterial({
+              color: new THREE.Color(INACTIVE_EDGE),
+              transparent: true,
+              opacity: initialOutlineOpacity,
+              depthWrite: false,
+            });
+            const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
+            mesh.add(edgeLines);
+
+            brainGroup.add(mesh);
+            lobeMeshes[key] = mesh;
+            lobeEdges[key] = edgeLines;
+          } else if (key === "cerebellum" || key === "brainstem") {
+            // Anatomical Cerebellum & Brainstem Base (cheap Lambert + sparser contours for 32k polys)
+            const baseMat = new THREE.MeshLambertMaterial({
+              color: 0x0b1628,
+              transparent: true,
+              opacity: 0.10,
+              depthWrite: false,
+            });
+            const baseMesh = new THREE.Mesh(geo, baseMat);
+            baseMesh.renderOrder = 2;
+
+            const baseEdgeGeo = new THREE.EdgesGeometry(geo, 42);
+            const baseEdgeMat = new THREE.LineBasicMaterial({
+              color: new THREE.Color(INACTIVE_EDGE),
+              transparent: true,
+              opacity: initialOutlineOpacity * 0.65,
+              depthWrite: false,
+            });
+            const baseEdgeLines = new THREE.LineSegments(baseEdgeGeo, baseEdgeMat);
+            baseEdgeLines.renderOrder = 2;
+            baseMesh.add(baseEdgeLines);
+            noncorticalEdges.push(baseEdgeLines);
+
+            brainGroup.add(baseMesh);
+          } else if (key === "cortex_core") {
+            // Dark matte inner core acting as a depth occluder so far-side lobes don't bleed through
+            const coreGeo = decimateGeometryByGrid(geo, 18, 4500) || geo;
+            const coreMat = new THREE.MeshBasicMaterial({
+              color: 0x040812,
+              transparent: false,
+              depthWrite: true,
+            });
+            const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+            coreMesh.renderOrder = 1;
+            brainGroup.add(coreMesh);
+          }
+        });
+
+        lobeKeys = Object.keys(lobeMeshes);
+        lobeMeshList = Object.values(lobeMeshes);
+        for (const key of lobeKeys) {
+          const conf = LOBE_CONFIG[key];
+          if (conf && conf.interpolatedFrom) {
+            const neighbors = conf.interpolatedFrom.map(nKey => lobeMeshes[nKey]);
+            computeCrownInterpolationWeights(lobeMeshes[key], neighbors);
+          }
+        }
+        needsRenderOrderSort = true;
+
+        // Center the brain model vertically so its center sits at the screen center (0, 0, 0)
+        const brainBox = new THREE.Box3().setFromObject(brainGroup);
+        const yOffset = !brainBox.isEmpty() ? brainBox.getCenter(new THREE.Vector3()).y : 0;
+        if (yOffset !== 0) {
+          brainGroup.position.y -= yOffset;
+        }
+        brainGroup.updateMatrixWorld(true);
+        const centeredBox = new THREE.Box3().setFromObject(brainGroup);
+        if (!centeredBox.isEmpty()) {
+          const bSize = centeredBox.getSize(new THREE.Vector3());
+          brainHalfWidthWorld = Math.max(0.5, Math.max(bSize.x, bSize.z) * 0.5);
+        }
+        for (const mesh of lobeMeshList) {
+          if (yOffset !== 0) {
+            mesh.userData.centroid.y += brainGroup.position.y;
+          }
+          mesh.userData.worldBox = new THREE.Box3().setFromObject(mesh);
+          mesh.userData.raycastProxy = createRaycastProxyMesh(mesh);
+        }
+        if (typeof updateNarrowMode === "function") {
+          updateNarrowMode();
+        }
+
+        if (currentEEGData) {
+          onBrainDataReceived(currentEEGData);
+        }
+      },
+      undefined,
+      (err) => {
+        console.error("Failed to load /brain_lobes.glb:", err);
+      }
+    );
+
+
+    // -------------------------------------------------------------------------
+    // Real-Time Server-Sent Events (SSE) Stream Handling
+    // -------------------------------------------------------------------------
+    let sseSource = null;
+    let pendingSSEData = null;
+    let frameCounter = 0;
+    let lastFpsTime = performance.now();
+    const statusDot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
+    const fpsCounter = document.getElementById("fpsCounter");
+
+    function connectSSE() {
+      if (sseSource) sseSource.close();
+
+      sseSource = new EventSource("/stream");
+
+      sseSource.onopen = () => {
+        if (isStreamActive && !isPlaybackPaused) {
+          setStatusIndicator("status-dot online", "STREAM ACTIVE");
+        }
+        fetch("/api/status")
+          .then(r => r.json())
+          .then(s => {
+            if (s && typeof s.paused === "boolean") {
+              updatePlaybackUI(s.paused, s.stream_active, s.stream_mode);
+            }
+          })
+          .catch(() => {});
+      };
+
+      sseSource.addEventListener("status", (event) => {
+        try {
+          const s = JSON.parse(event.data);
+          if (s && typeof s.paused === "boolean") {
+            updatePlaybackUI(s.paused, s.stream_active, s.stream_mode);
+          }
+        } catch (e) {
+          console.error("SSE status parse error", e);
+        }
+      });
+
+      sseSource.onmessage = (event) => {
+        try {
+          pendingSSEData = JSON.parse(event.data);
+          frameCounter++;
+        } catch (e) {
+          console.error("SSE parse error", e);
+        }
+      };
+
+      sseSource.onerror = () => {
+        setStatusIndicator("status-dot offline", "RECONNECTING...");
+        // EventSource automatically retries
+      };
+    }
+
+    connectSSE();
+
+    // FPS Meter
+    setInterval(() => {
+      const now = performance.now();
+      const elapsed = (now - lastFpsTime) / 1000;
+      const fps = Math.round(frameCounter / elapsed);
+      fpsCounter.textContent = `${fps} FPS`;
+      frameCounter = 0;
+      lastFpsTime = now;
+    }, 1000);
+
+    // -------------------------------------------------------------------------
+    // EEG Data Processor & Lobe Glow Modulation
+    // -------------------------------------------------------------------------
+    let isPlaybackPaused = false;
+    let isStreamActive = true;
+    let currentStreamMode = "live";
+    let isScrubbing = false;
+    let lastSeekFetchTime = 0;
+    let seekSequence = 0;
+    let seekPendingSince = 0;
+    let lastKnownDuration = 0;
+    let lastSampleCount = 0;
+    let lastSessionId = 0;
+
+    // Rolling Time-Series History for Expandable Wave Band Graphs
+    const BAND_HISTORY_MAX = 120; // ~6 seconds at 20 FPS
+    const BAND_KEYS = ["alpha", "beta", "theta", "gamma", "delta"];
+    const BAND_HEX_CSS = {
+      alpha: "#a855f7",
+      beta:  "#22c55e",
+      theta: "#facc15",
+      gamma: "#ec4899",
+      delta: "#ef4444"
+    };
+    const BAND_RGB = {
+      alpha: [168, 85, 247],
+      beta:  [34, 197, 94],
+      theta: [250, 204, 21],
+      gamma: [236, 72, 153],
+      delta: [239, 68, 68]
+    };
+    const bandHistory = {
+      alpha: [],
+      beta:  [],
+      theta: [],
+      gamma: [],
+      delta: []
+    };
+    let lastGraphSampleKey = null;
+    let lastGlobalDominant = "alpha";
+
+    // Track active/disabled state for each individual frequency band
+    const bandEnabledState = {
+      alpha: true,
+      beta:  true,
+      theta: true,
+      gamma: true,
+      delta: true
+    };
+
+    function isBandEnabled(band) {
+      if (!band || band === "all") return true;
+      return bandEnabledState[band] !== false;
+    }
+
+    function setBandEnabled(band, enabled) {
+      if (band === "all" || !BAND_KEYS.includes(band)) return;
+      bandEnabledState[band] = !!enabled;
+
+      const btn = document.querySelector(`.band-btn[data-band="${band}"]`);
+      if (btn) {
+        const swatch = btn.querySelector(".band-swatch");
+        if (!bandEnabledState[band]) {
+          // Disable band: go to greyscale
+          btn.classList.add("band-disabled");
+          if (swatch) {
+            swatch.title = `Enable ${band.toUpperCase()} band`;
+            swatch.setAttribute("aria-label", `Enable ${band} band`);
+          }
+          // If this band was selected, switch back to "All Bands"
+          if (selectedBandMode === band) {
+            document.querySelectorAll(".band-btn").forEach(b => {
+              b.classList.remove("active");
+              b.classList.remove("expanded");
+            });
+            const allBtn = document.querySelector('.band-btn[data-band="all"]');
+            if (allBtn) {
+              allBtn.classList.add("active");
+              allBtn.classList.add("expanded");
+            }
+            selectedBandMode = "all";
+          } else {
+            btn.classList.remove("expanded");
+          }
+        } else {
+          // Enable band
+          btn.classList.remove("band-disabled");
+          if (swatch) {
+            swatch.title = `Disable ${band.toUpperCase()} band`;
+            swatch.setAttribute("aria-label", `Disable ${band} band`);
+          }
+        }
+      }
+
+      if (currentEEGData) {
+        onBrainDataReceived(currentEEGData);
+      }
+      renderAllBandGraphs(true);
+    }
+
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    const SVG_W = 210;
+    const SVG_H = 54;
+    const SVG_PAD_L = 2;
+    const SVG_PAD_R = 5;
+    const SVG_PAD_T = 5;
+    const SVG_PAD_B = 4;
+    const SVG_PLOT_W = SVG_W - SVG_PAD_L - SVG_PAD_R;
+    const SVG_PLOT_H = SVG_H - SVG_PAD_T - SVG_PAD_B;
+    const GRAPH_MAX_SAMPLE_PTS = 60;
+    const GRAPH_RENDER_INTERVAL_MS = 85;
+
+    let bandGraphsDirty = true;
+    let lastGraphRenderMs = 0;
+    const bandSvgs = Array.from(document.querySelectorAll(".band-svg"));
+    const sidebarHudEl = document.querySelector(".sidebar.hud");
+
+    function createSvgEl(tag, attrs) {
+      const el = document.createElementNS(SVG_NS, tag);
+      for (const k in attrs) el.setAttribute(k, attrs[k]);
+      return el;
+    }
+
+    function initBandSvgChart(svgEl) {
+      if (svgEl._chartRefs) return svgEl._chartRefs;
+      const chartBand = svgEl.dataset.svgBand;
+      const defs = createSvgEl("defs", {});
+      svgEl.appendChild(defs);
+
+      // Static background grid (created once, never redrawn)
+      const gridGroup = createSvgEl("g", {
+        stroke: "rgba(56, 189, 248, 0.09)",
+        "stroke-width": "1",
+        fill: "none",
+      });
+      for (const frac of [0.25, 0.5, 0.75]) {
+        const y = (SVG_PAD_T + SVG_PLOT_H * frac).toFixed(1);
+        gridGroup.appendChild(createSvgEl("line", { x1: "0", y1: y, x2: String(SVG_W), y2: y }));
+      }
+      for (let i = 1; i < 4; i++) {
+        const x = ((SVG_W * i) / 4).toFixed(1);
+        gridGroup.appendChild(createSvgEl("line", { x1: x, y1: "0", x2: x, y2: String(SVG_H) }));
+      }
+      svgEl.appendChild(gridGroup);
+
+      const scaleLabel = createSvgEl("text", {
+        x: "3",
+        y: "9",
+        fill: "rgba(100, 116, 139, 0.65)",
+        "font-size": "8",
+        "font-family": "monospace",
+      });
+      scaleLabel.textContent = "50%";
+      svgEl.appendChild(scaleLabel);
+
+      const seriesKeys = chartBand === "all" ? BAND_KEYS : [chartBand];
+      const seriesMap = {};
+      for (const b of seriesKeys) {
+        const hex = BAND_HEX_CSS[b] || "#38bdf8";
+        const rgb = BAND_RGB[b] || [56, 189, 248];
+        const gradId = `bandGrad_${chartBand}_${b}`;
+        const grad = createSvgEl("linearGradient", { id: gradId, x1: "0", y1: "0", x2: "0", y2: "1" });
+        grad.appendChild(createSvgEl("stop", { offset: "0%", "stop-color": hex, "stop-opacity": chartBand === "all" ? "0.16" : "0.30" }));
+        grad.appendChild(createSvgEl("stop", { offset: "100%", "stop-color": hex, "stop-opacity": "0" }));
+        defs.appendChild(grad);
+
+        const g = createSvgEl("g", { display: "none" });
+        const area = createSvgEl("polygon", { fill: `url(#${gradId})`, points: "" });
+        const halo = createSvgEl("polyline", {
+          fill: "none",
+          stroke: `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.26)`,
+          "stroke-width": "4.2",
+          "stroke-linecap": "round",
+          "stroke-linejoin": "round",
+          points: "",
+        });
+        const line = createSvgEl("polyline", {
+          fill: "none",
+          stroke: hex,
+          "stroke-width": "1.8",
+          "stroke-linecap": "round",
+          "stroke-linejoin": "round",
+          points: "",
+        });
+        const dotHalo = createSvgEl("circle", {
+          r: "4.2",
+          fill: `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.28)`,
+        });
+        const dotCore = createSvgEl("circle", {
+          r: "2.3",
+          fill: "#f8fafc",
+          stroke: hex,
+          "stroke-width": "1.3",
+        });
+        g.appendChild(area);
+        g.appendChild(halo);
+        g.appendChild(line);
+        g.appendChild(dotHalo);
+        g.appendChild(dotCore);
+        svgEl.appendChild(g);
+        seriesMap[b] = { g, area, halo, line, dotHalo, dotCore, lastLineW: "" };
+      }
+
+      svgEl._chartRefs = {
+        btn: svgEl.closest(".band-btn"),
+        band: chartBand,
+        scaleLabel,
+        lastScaleText: "50%",
+        lastDomKey: null,
+        seriesMap,
+      };
+      return svgEl._chartRefs;
+    }
+
+    function updateSvgBandSeries(seriesRef, points, maxScale, showArea, lineWidth) {
+      const n = points ? points.length : 0;
+      if (n === 0) {
+        seriesRef.g.setAttribute("display", "none");
+        return;
+      }
+      seriesRef.g.removeAttribute("display");
+
+      const baseY = (SVG_PAD_T + SVG_PLOT_H).toFixed(1);
+      const step = n > GRAPH_MAX_SAMPLE_PTS ? (n - 1) / (GRAPH_MAX_SAMPLE_PTS - 1) : 1;
+      const denom = Math.max(1, BAND_HISTORY_MAX - 1);
+      let linePts = "";
+      let firstX = "";
+      let lastX = "";
+      let lastY = "";
+
+      for (let s = 0; ; s++) {
+        const idx = step === 1 ? s : (s >= GRAPH_MAX_SAMPLE_PTS - 1 ? n - 1 : Math.round(s * step));
+        const offsetIdx = BAND_HISTORY_MAX - n + idx;
+        const x = (SVG_PAD_L + (offsetIdx / denom) * SVG_PLOT_W).toFixed(1);
+        const norm = Math.min(1, Math.max(0, points[idx] / maxScale));
+        const y = (SVG_PAD_T + SVG_PLOT_H * (1 - norm)).toFixed(1);
+        const pair = x + "," + y;
+        linePts += (s === 0 ? pair : " " + pair);
+        if (s === 0) firstX = x;
+        lastX = x;
+        lastY = y;
+        if (idx >= n - 1) break;
+      }
+
+      seriesRef.line.setAttribute("points", linePts);
+      seriesRef.halo.setAttribute("points", linePts);
+      const lwStr = String(lineWidth);
+      if (seriesRef.lastLineW !== lwStr) {
+        seriesRef.lastLineW = lwStr;
+        seriesRef.line.setAttribute("stroke-width", lwStr);
+        seriesRef.halo.setAttribute("stroke-width", (lineWidth + 2.8).toFixed(1));
+      }
+
+      if (showArea && n >= 2) {
+        seriesRef.area.setAttribute("points", `${firstX},${baseY} ${linePts} ${lastX},${baseY}`);
+        seriesRef.area.removeAttribute("display");
+      } else {
+        seriesRef.area.setAttribute("display", "none");
+      }
+
+      seriesRef.dotHalo.setAttribute("cx", lastX);
+      seriesRef.dotHalo.setAttribute("cy", lastY);
+      seriesRef.dotCore.setAttribute("cx", lastX);
+      seriesRef.dotCore.setAttribute("cy", lastY);
+    }
+
+    for (let i = 0; i < bandSvgs.length; i++) {
+      initBandSvgChart(bandSvgs[i]);
+    }
+
+    function renderAllBandGraphs(force = false) {
+      const isHidden = document.body.classList.contains("fullscreen-mode") || document.body.classList.contains("narrow-mode");
+      if (!force && isHidden && sidebarHudEl && !sidebarHudEl.classList.contains("revealed")) {
+        return;
+      }
+      bandGraphsDirty = false;
+      lastGraphRenderMs = performance.now();
+
+      for (let cIdx = 0; cIdx < bandSvgs.length; cIdx++) {
+        const svgEl = bandSvgs[cIdx];
+        const refs = initBandSvgChart(svgEl);
+        if (refs.btn && !refs.btn.classList.contains("expanded")) continue;
+
+        const band = refs.band;
+        if (band === "all") {
+          const enabledBands = BAND_KEYS.filter(b => isBandEnabled(b));
+          let maxVal = 0.45;
+          for (const b of enabledBands) {
+            const arr = bandHistory[b];
+            for (let i = 0; i < arr.length; i++) {
+              if (arr[i] > maxVal) maxVal = arr[i];
+            }
+          }
+          const maxScale = Math.min(1.0, Math.max(0.50, maxVal * 1.15));
+          const scaleTxt = Math.round(maxScale * 100) + "%";
+          if (refs.lastScaleText !== scaleTxt) {
+            refs.lastScaleText = scaleTxt;
+            refs.scaleLabel.textContent = scaleTxt;
+          }
+
+          for (const b of BAND_KEYS) {
+            if (!enabledBands.includes(b)) {
+              refs.seriesMap[b].g.setAttribute("display", "none");
+            }
+          }
+
+          const domBand = (lastGlobalDominant && enabledBands.includes(lastGlobalDominant)) ? lastGlobalDominant : null;
+          if (domBand && refs.lastDomKey !== domBand) {
+            refs.lastDomKey = domBand;
+            svgEl.appendChild(refs.seriesMap[domBand].g);
+          }
+
+          for (const b of enabledBands) {
+            const isDom = b === domBand;
+            updateSvgBandSeries(refs.seriesMap[b], bandHistory[b], maxScale, isDom, isDom ? 1.9 : 1.35);
+          }
+        } else if (bandHistory[band]) {
+          const arr = bandHistory[band];
+          let maxVal = 0.42;
+          for (let i = 0; i < arr.length; i++) {
+            if (arr[i] > maxVal) maxVal = arr[i];
+          }
+          const maxScale = Math.min(1.0, Math.max(0.50, maxVal * 1.18));
+          const scaleTxt = Math.round(maxScale * 100) + "%";
+          if (refs.lastScaleText !== scaleTxt) {
+            refs.lastScaleText = scaleTxt;
+            refs.scaleLabel.textContent = scaleTxt;
+          }
+          updateSvgBandSeries(refs.seriesMap[band], arr, maxScale, true, 1.85);
+        }
+      }
+    }
+
+    // Cached HUD DOM references & zero-layout progress bar updates
+    const domCache = {
+      btnPause: document.getElementById("btnPause"),
+      progBar: document.getElementById("playbackProgressBar"),
+      progFill: document.getElementById("playbackProgress"),
+      progThumb: document.getElementById("playbackProgressThumb"),
+      playbackModeLabel: document.getElementById("playbackModeLabel"),
+      playbackTs: document.getElementById("playbackTimestamp"),
+      playbackElapsed: document.getElementById("playbackElapsed"),
+      metricAlphaProm: document.getElementById("metricAlphaProm"),
+      metricEngagement: document.getElementById("metricEngagement"),
+      btnCalibrate: document.getElementById("btnCalibrate"),
+      bandVals: {
+        alpha: document.getElementById("valAlpha"),
+        beta:  document.getElementById("valBeta"),
+        theta: document.getElementById("valTheta"),
+        gamma: document.getElementById("valGamma"),
+        delta: document.getElementById("valDelta"),
+      },
+      barWidth: 0,
+      lastRatio: 0,
+      lastValues: {},
+    };
+
+    function setCachedText(el, key, value) {
+      if (el && domCache.lastValues[key] !== value) {
+        domCache.lastValues[key] = value;
+        el.textContent = value;
+      }
+    }
+
+    function invalidateHudMetrics() {
+      domCache.barWidth = domCache.progBar ? domCache.progBar.clientWidth : 0;
+      setPlaybackBarRatio(domCache.lastRatio);
+    }
+
+    function setPlaybackBarRatio(ratio) {
+      const clamped = Math.min(1, Math.max(0, isFinite(ratio) ? ratio : 0));
+      domCache.lastRatio = clamped;
+      if (domCache.progFill) {
+        const sx = clamped.toFixed(4);
+        if (domCache.lastValues._scaleX !== sx) {
+          domCache.lastValues._scaleX = sx;
+          domCache.progFill.style.transform = `scaleX(${sx})`;
+        }
+      }
+      if (domCache.progThumb) {
+        if (!domCache.barWidth && domCache.progBar) {
+          domCache.barWidth = domCache.progBar.clientWidth;
+        }
+        const xPx = (clamped * domCache.barWidth).toFixed(1) + "px";
+        if (domCache.lastValues._thumbX !== xPx) {
+          domCache.lastValues._thumbX = xPx;
+          domCache.progThumb.style.setProperty("--thumb-x", xPx);
+        }
+      }
+    }
+
+    function setStatusIndicator(cls, text) {
+      if (domCache.lastValues._statusCls !== cls) {
+        domCache.lastValues._statusCls = cls;
+        statusDot.className = cls;
+      }
+      setCachedText(statusText, "_statusTxt", text);
+    }
+
+    function formatClockSec(sec) {
+      if (sec === undefined || sec === null || !isFinite(sec)) return "00:00.0";
+      const s = Math.max(0, sec);
+      const mins = Math.floor(s / 60);
+      const rem = (s % 60).toFixed(1).padStart(4, "0");
+      return String(mins).padStart(2, "0") + ":" + rem;
+    }
+
+    function updatePlaybackUI(paused, streamActive, streamMode) {
+      if (typeof streamActive === "boolean") {
+        isStreamActive = streamActive;
+      }
+      if (typeof streamMode === "string" && streamMode) {
+        currentStreamMode = streamMode;
+      }
+      isPlaybackPaused = isStreamActive ? !!paused : false;
+      const transportState = !isStreamActive ? "idle" : (isPlaybackPaused ? "paused" : "playing");
+      const btnPause = domCache.btnPause;
+      const progFill = domCache.progFill;
+      const progThumb = domCache.progThumb;
+      if (btnPause && domCache.lastValues._transportState !== transportState) {
+        domCache.lastValues._transportState = transportState;
+        if (transportState === "idle") {
+          btnPause.textContent = "▶ Play Recording";
+          btnPause.classList.add("idle");
+          btnPause.classList.remove("paused");
+        } else if (transportState === "paused") {
+          btnPause.textContent = "▶ Resume Recording";
+          btnPause.classList.remove("idle");
+          btnPause.classList.add("paused");
+        } else {
+          btnPause.textContent = "⏸ Pause Recording";
+          btnPause.classList.remove("idle");
+          btnPause.classList.remove("paused");
+        }
+      }
+      const barColor = transportState === "idle" ? "#64748b" : (transportState === "paused" ? "#eab308" : "var(--accent)");
+      if (progFill && domCache.lastValues._fillState !== transportState) {
+        domCache.lastValues._fillState = transportState;
+        progFill.style.backgroundColor = barColor;
+      }
+      if (progThumb && domCache.lastValues._thumbState !== transportState) {
+        domCache.lastValues._thumbState = transportState;
+        progThumb.style.borderColor = barColor;
+      }
+      const activeModeText = (currentStreamMode === "replay" || (currentEEGData && currentEEGData.is_replay)) ? "REPLAY" : "LIVE";
+      const modeLabel = !isStreamActive ? "IDLE" : (isPlaybackPaused ? "PAUSED" : activeModeText);
+      setCachedText(domCache.playbackModeLabel, "modeLabel", modeLabel);
+      if (!isStreamActive) {
+        setStatusIndicator("status-dot idle", "IDLE — READY");
+      } else if (isPlaybackPaused) {
+        setStatusIndicator("status-dot paused", "PAUSED");
+      } else if (currentEEGData && currentEEGData.artifact) {
+        setStatusIndicator("status-dot artifact", "EMG ARTIFACT CLAMPED");
+      } else if (sseSource && sseSource.readyState === EventSource.OPEN) {
+        setStatusIndicator("status-dot online", "STREAM ACTIVE");
+      }
+    }
+
+    function updatePauseUI(paused) {
+      updatePlaybackUI(paused, isStreamActive, currentStreamMode);
+    }
+
+    function togglePause() {
+      const payload = !isStreamActive
+        ? { action: "start", paused: false }
+        : { paused: !isPlaybackPaused };
+      if (isStreamActive) {
+        updatePlaybackUI(!isPlaybackPaused, isStreamActive, currentStreamMode);
+      }
+      fetch("/api/pause", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      })
+        .then(r => r.json())
+        .then(res => {
+          if (res && typeof res.paused === "boolean") {
+            updatePlaybackUI(res.paused, res.stream_active, res.stream_mode);
+          }
+        })
+        .catch(err => console.error("Pause toggle error", err));
+    }
+
+    function onBrainDataReceived(data) {
+      currentEEGData = data;
+
+      // 0. Timestamp & Playback Progress Update
+      const nextSessionId = typeof data.session_id === "number" ? data.session_id : lastSessionId;
+      const nextSampleCount = typeof data.sample_count === "number" ? data.sample_count : lastSampleCount;
+      if (nextSessionId !== lastSessionId || nextSampleCount < lastSampleCount) {
+        lastSessionId = nextSessionId;
+        lastGraphSampleKey = null;
+        lastKnownDuration = 0;
+        for (const b of BAND_KEYS) {
+          if (bandHistory[b]) bandHistory[b].length = 0;
+        }
+        bandGraphsDirty = true;
+      }
+      lastSampleCount = nextSampleCount;
+
+      const nextActive = typeof data.stream_active === "boolean" ? data.stream_active : isStreamActive;
+      const nextMode = (typeof data.stream_mode === "string" && data.stream_mode)
+        ? data.stream_mode
+        : (data.is_replay ? "replay" : "live");
+      const nextPaused = typeof data.paused === "boolean" ? data.paused : isPlaybackPaused;
+      if (nextPaused !== isPlaybackPaused || nextActive !== isStreamActive || nextMode !== currentStreamMode) {
+        updatePlaybackUI(nextPaused, nextActive, nextMode);
+      }
+      const activeModeText = (currentStreamMode === "replay" || data.is_replay) ? "REPLAY" : "LIVE";
+      setCachedText(
+        domCache.playbackModeLabel,
+        "modeLabel",
+        !isStreamActive ? "IDLE" : (isPlaybackPaused ? "PAUSED" : activeModeText)
+      );
+
+      const tsIso = data.timestamp_iso || (data.timestamp ? new Date(data.timestamp * 1000).toISOString().replace("T", " ").slice(0, 23) : "--:--:--.---");
+      setCachedText(domCache.playbackTs, "playbackTs", tsIso);
+
+      const elapsedStr = formatClockSec(data.elapsed_sec || 0);
+      const isSeekInFlight = seekPendingSince > 0 && (performance.now() - seekPendingSince) < 1500;
+      if (data.duration_sec && data.duration_sec > 0) {
+        lastKnownDuration = data.duration_sec;
+        const canSeek = data.can_seek !== false;
+        const thumbVis = canSeek ? "block" : "none";
+        if (domCache.progThumb && domCache.lastValues._thumbVis !== thumbVis) {
+          domCache.lastValues._thumbVis = thumbVis;
+          domCache.progThumb.style.display = thumbVis;
+          if (canSeek && !domCache.barWidth && domCache.progBar) domCache.barWidth = domCache.progBar.clientWidth;
+        }
+        if (domCache.progBar) {
+          const cursorStyle = canSeek ? "pointer" : "default";
+          if (domCache.lastValues._progCursor !== cursorStyle) {
+            domCache.lastValues._progCursor = cursorStyle;
+            domCache.progBar.style.cursor = cursorStyle;
+          }
+        }
+        if (!isScrubbing && !isSeekInFlight) {
+          const durStr = formatClockSec(data.duration_sec);
+          setCachedText(domCache.playbackElapsed, "elapsed", `${elapsedStr} / ${durStr}`);
+          setPlaybackBarRatio(data.elapsed_sec / data.duration_sec);
+        }
+      } else {
+        lastKnownDuration = 0;
+        if (domCache.progThumb && domCache.lastValues._thumbVis !== "none") {
+          domCache.lastValues._thumbVis = "none";
+          domCache.progThumb.style.display = "none";
+        }
+        if (domCache.progBar && domCache.lastValues._progCursor !== "default") {
+          domCache.lastValues._progCursor = "default";
+          domCache.progBar.style.cursor = "default";
+        }
+        setCachedText(domCache.playbackElapsed, "elapsed", elapsedStr);
+        setPlaybackBarRatio(1.0);
+      }
+
+      // 1. Artifact Warning
+      if (!isStreamActive) {
+        setStatusIndicator("status-dot idle", "IDLE — READY");
+      } else if (isPlaybackPaused) {
+        setStatusIndicator("status-dot paused", "PAUSED");
+      } else if (data.artifact) {
+        setStatusIndicator("status-dot artifact", "EMG ARTIFACT CLAMPED");
+      } else if (sseSource && sseSource.readyState === EventSource.OPEN) {
+        setStatusIndicator("status-dot online", "STREAM ACTIVE");
+      }
+
+      // 2. Global Cognitive Indices
+      setCachedText(domCache.metricAlphaProm, "alphaProm", Math.round(data.alpha_prominence * 100) + "%");
+      setCachedText(domCache.metricEngagement, "engagement", data.engagement.toFixed(2));
+      if (typeof data.baseline_locked === "boolean" && !isCalibratingActive) {
+        if (data.baseline_locked !== isBaselineLocked) {
+          isBaselineLocked = data.baseline_locked;
+          const bBtn = domCache.btnCalibrate;
+          if (bBtn) {
+            if (isBaselineLocked) {
+              bBtn.textContent = "🔒 Locked Baseline (Reset)";
+              bBtn.style.borderColor = "#22c55e";
+              bBtn.style.color = "#22c55e";
+            } else {
+              bBtn.textContent = "Calibrate 5s Baseline";
+              bBtn.style.borderColor = "rgba(56, 189, 248, 0.4)";
+              bBtn.style.color = "#38bdf8";
+            }
+          }
+        }
+      }
+
+      // 3. Update Wave Band Pills
+      const regions = data.regions;
+      if (!regions) return;
+
+      // Compute global average band distribution
+      const bandSums = { alpha: 0, beta: 0, theta: 0, gamma: 0, delta: 0 };
+      let rCount = 0;
+      for (const rKey in regions) {
+        const bands = regions[rKey].bands;
+        for (const b in bandSums) bandSums[b] += bands[b] || 0;
+        rCount++;
+      }
+      if (rCount > 0) {
+        const bandAvgs = {};
+        for (const b in bandSums) {
+          const avg = bandSums[b] / rCount;
+          bandAvgs[b] = avg;
+          setCachedText(domCache.bandVals[b], "val_" + b, Math.round(avg * 100) + "%");
+        }
+
+        const enabledBands = BAND_KEYS.filter(b => isBandEnabled(b));
+        if (enabledBands.length > 0) {
+          if (data.global_dominant && isBandEnabled(data.global_dominant)) {
+            lastGlobalDominant = data.global_dominant;
+          } else {
+            lastGlobalDominant = enabledBands.reduce((a, b) => ((bandAvgs[a] || 0) >= (bandAvgs[b] || 0) ? a : b), enabledBands[0]);
+          }
+        } else {
+          lastGlobalDominant = null;
+        }
+
+        const sampleKey = `${data.session_id || 0}_${data.timestamp}_${data.sample_count}`;
+        if (isStreamActive && (sampleKey !== lastGraphSampleKey || (!isPlaybackPaused && bandHistory.alpha.length === 0))) {
+          lastGraphSampleKey = sampleKey;
+          for (const b of BAND_KEYS) {
+            bandHistory[b].push(bandAvgs[b] || 0);
+            if (bandHistory[b].length > BAND_HISTORY_MAX) {
+              bandHistory[b].shift();
+            }
+          }
+          bandGraphsDirty = true;
+        }
+      }
+
+      // 4. Update Each Anatomical Lobe Target Intensity and Color
+      const enabledBands = BAND_KEYS.filter(b => isBandEnabled(b));
+      for (let i = 0; i < lobeKeys.length; i++) {
+        const key = lobeKeys[i];
+        const mesh = lobeMeshes[key];
+        const rData = regions[key];
+        if (!rData) continue;
+
+        let act = 0.0;
+        let colorHex = 0x38bdf8;
+
+        if (selectedBandMode === "all") {
+          // Dominant frequency mode among active (enabled) bands
+          let dom = rData.dominant;
+          if (!isBandEnabled(dom)) {
+            if (enabledBands.length > 0) {
+              dom = enabledBands.reduce((best, b) => ((rData.bands[b] || 0) > (rData.bands[best] || 0) ? b : best), enabledBands[0]);
+            } else {
+              dom = null;
+            }
+          }
+          if (dom && BAND_COLORS[dom] !== undefined) {
+            colorHex = BAND_COLORS[dom];
+            const bandVal = rData.bands[dom] || 0.0;
+            // Match single-band mode scaling: [0.10, 0.45] -> [0.0, 1.0]
+            act = Math.min(1.0, Math.max(0.0, (bandVal - 0.10) / 0.35));
+          } else {
+            colorHex = 0x38bdf8;
+            act = 0.05;
+          }
+        } else {
+          // Target band inspection (e.g. ALPHA)
+          const bandVal = rData.bands[selectedBandMode] || 0.0;
+          // Scale from [0.10, 0.45] to [0.0, 1.0]
+          act = Math.min(1.0, Math.max(0.0, (bandVal - 0.10) / 0.35));
+          colorHex = BAND_COLORS[selectedBandMode];
+        }
+
+        mesh.userData.targetAct = act;
+        mesh.userData.targetColor.setHex(colorHex);
+
+
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Interactive Raycaster (Hover to Inspect Lobe — Throttled for Performance)
+    // -------------------------------------------------------------------------
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2(-1000, -1000);
+    const tooltip = document.getElementById("tooltip");
+    const RAYCAST_INTERVAL_MS = 85;
+    let pointerDirty = false;
+    let pointerOverCanvas = false;
+    let pointerClientX = 0;
+    let pointerClientY = 0;
+    let lastRaycastTime = 0;
+    let tooltipRefs = null;
+
+    function ensureTooltipRefs() {
+      if (tooltipRefs) return tooltipRefs;
+      tooltip.textContent = "";
+      const labelEl = document.createElement("div");
+      labelEl.style.cssText = "font-weight:700; color:#38bdf8; margin-bottom:4px;";
+      const chRow = document.createElement("div");
+      chRow.appendChild(document.createTextNode("Channels: "));
+      const chSpan = document.createElement("span");
+      chSpan.style.cssText = "font-family:monospace; color:#94a3b8;";
+      chRow.appendChild(chSpan);
+
+      const dataGroup = document.createElement("div");
+      const domRow = document.createElement("div");
+      domRow.appendChild(document.createTextNode("Dominant: "));
+      const domVal = document.createElement("b");
+      domRow.appendChild(domVal);
+
+      const actRow = document.createElement("div");
+      actRow.appendChild(document.createTextNode("Activity: "));
+      const actVal = document.createElement("b");
+      actRow.appendChild(actVal);
+
+      const bandsRow = document.createElement("div");
+      bandsRow.style.cssText = "font-size:9px; color:#64748b; margin-top:4px;";
+
+      dataGroup.appendChild(domRow);
+      dataGroup.appendChild(actRow);
+      dataGroup.appendChild(bandsRow);
+      tooltip.appendChild(labelEl);
+      tooltip.appendChild(chRow);
+      tooltip.appendChild(dataGroup);
+
+      tooltipRefs = { labelEl, chSpan, dataGroup, domRow, actRow, domVal, actVal, bandsRow };
+      return tooltipRefs;
+    }
+
+    function hideTooltip() {
+      if (domCache.lastValues._ttVis !== false) {
+        domCache.lastValues._ttVis = false;
+        tooltip.style.display = "none";
+      }
+    }
+
+    const hoverCandidates = [];
+
+    // Build a watertight vertex-clustered proxy mesh (~350 tris/lobe) so hover raycasting
+    // avoids walking 5,000-7,500+ triangles per lobe on dense GLB meshes.
+    function createRaycastProxyMesh(mesh) {
+      const geo = mesh && mesh.geometry;
+      const proxyGeo = decimateGeometryByGrid(geo, 7, 350);
+      if (!proxyGeo) return mesh;
+
+      const proxy = new THREE.Mesh(proxyGeo, mesh.material);
+      proxy.matrixAutoUpdate = false;
+      proxy.matrix.copy(mesh.matrixWorld);
+      proxy.matrixWorld.copy(mesh.matrixWorld);
+      proxy.userData = mesh.userData;
+      return proxy;
+    }
+
+    function updateHoverTooltip(nowMs) {
+      if (!pointerOverCanvas || isOrbitDragging || lobeMeshList.length === 0) {
+        hideTooltip();
+        return;
+      }
+      if (!pointerDirty || nowMs - lastRaycastTime < RAYCAST_INTERVAL_MS) {
+        return;
+      }
+      pointerDirty = false;
+      lastRaycastTime = nowMs;
+
+      raycaster.setFromCamera(mouse, camera);
+      hoverCandidates.length = 0;
+      for (let i = 0; i < lobeMeshList.length; i++) {
+        const m = lobeMeshList[i];
+        if (!m.userData.worldBox || raycaster.ray.intersectsBox(m.userData.worldBox)) {
+          hoverCandidates.push(m.userData.raycastProxy || m);
+        }
+      }
+      const intersects = hoverCandidates.length > 0 ? raycaster.intersectObjects(hoverCandidates, false) : [];
+
+      if (intersects.length > 0) {
+        const hit = intersects[0].object;
+        const conf = hit.userData.config;
+        const key = hit.userData.regionKey;
+        const rData = currentEEGData && currentEEGData.regions ? currentEEGData.regions[key] : null;
+        const tt = ensureTooltipRefs();
+
+        if (domCache.lastValues._ttVis !== true) {
+          domCache.lastValues._ttVis = true;
+          tooltip.style.display = "block";
+        }
+        tooltip.style.transform = `translate3d(${pointerClientX}px, ${pointerClientY}px, 0) translate(-50%, -120%)`;
+
+        setCachedText(tt.labelEl, "_ttLabel", conf.label);
+        setCachedText(tt.chSpan, "_ttCh", conf.channels.join(", "));
+
+        let displayBands = rData ? rData.bands : null;
+        let displayDom = rData ? rData.dominant : null;
+        if (!displayBands && conf.interpolatedFrom && currentEEGData && currentEEGData.regions) {
+          const avgBands = { delta: 0, theta: 0, alpha: 0, beta: 0, gamma: 0 };
+          let nCount = 0;
+          for (const nKey of conf.interpolatedFrom) {
+            const nr = currentEEGData.regions[nKey];
+            if (nr && nr.bands) {
+              for (const b of BAND_KEYS) avgBands[b] += nr.bands[b] || 0;
+              nCount++;
+            }
+          }
+          if (nCount > 0) {
+            for (const b of BAND_KEYS) avgBands[b] /= nCount;
+            displayBands = avgBands;
+            displayDom = BAND_KEYS.reduce((best, b) => (avgBands[b] > avgBands[best] ? b : best), BAND_KEYS[0]);
+          }
+        }
+
+        if (displayBands) {
+          if (domCache.lastValues._ttDataVis !== true) {
+            domCache.lastValues._ttDataVis = true;
+            tt.dataGroup.style.display = "";
+            tt.domRow.style.display = "";
+            tt.actRow.style.display = "";
+          }
+          const enabledBands = BAND_KEYS.filter(b => isBandEnabled(b));
+          let dom = displayDom;
+          if (!isBandEnabled(dom)) {
+            if (enabledBands.length > 0) {
+              dom = enabledBands.reduce((best, b) => ((displayBands[b] || 0) > (displayBands[best] || 0) ? b : best), enabledBands[0]);
+            } else {
+              dom = null;
+            }
+          }
+          const domHex = dom && BAND_COLORS[dom] ? "#" + BAND_COLORS[dom].toString(16).padStart(6, "0") : "#94a3b8";
+          const domText = dom ? dom.toUpperCase() : "NONE";
+          if (domCache.lastValues._ttDomHex !== domHex) {
+            domCache.lastValues._ttDomHex = domHex;
+            tt.domVal.style.color = domHex;
+          }
+          setCachedText(tt.domVal, "_ttDom", domText);
+          setCachedText(tt.actVal, "_ttAct", Math.round(hit.userData.currentAct * 100) + "%");
+          const suffix = conf.interpolatedFrom ? " (interpolated)" : "";
+          setCachedText(
+            tt.bandsRow,
+            "_ttBands",
+            `α: ${Math.round(displayBands.alpha * 100)}% | β: ${Math.round(displayBands.beta * 100)}% | θ: ${Math.round(displayBands.theta * 100)}%${suffix}`
+          );
+        } else if (domCache.lastValues._ttDataVis !== false) {
+          domCache.lastValues._ttDataVis = false;
+          tt.dataGroup.style.display = "none";
+        }
+      } else {
+        hideTooltip();
+      }
+    }
+
+    window.addEventListener("mousemove", (event) => {
+      if (event.target !== renderer.domElement || isOrbitDragging) {
+        pointerOverCanvas = false;
+        hideTooltip();
+        return;
+      }
+      pointerOverCanvas = true;
+      pointerClientX = event.clientX;
+      pointerClientY = event.clientY;
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      pointerDirty = true;
+      if (tooltip.style.display === "block") {
+        tooltip.style.transform = `translate3d(${pointerClientX}px, ${pointerClientY}px, 0) translate(-50%, -120%)`;
+      }
+    });
+
+    // -------------------------------------------------------------------------
+    // Animation Loop with Smooth LERP & Glow Post-Processing
+    // -------------------------------------------------------------------------
+    const clock = new THREE.Clock();
+    let lastRenderedSliderOpacity = -1;
+    let lastIdleRenderMs = 0;
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (document.hidden) {
+        clock.getDelta();
+        return;
+      }
+
+      let hadNewData = false;
+      if (pendingSSEData !== null) {
+        const latest = pendingSSEData;
+        pendingSSEData = null;
+        onBrainDataReceived(latest);
+        hadNewData = true;
+      }
+
+      const delta = clock.getDelta();
+      const time = clock.getElapsedTime();
+
+      // Controls damping
+      controls.update();
+
+      // Sync zoom readout/slider when camera distance or target changes
+      const curZoomDist = camera.position.distanceTo(controls.target);
+      let cameraMoved = false;
+      if (
+        Math.abs(curZoomDist - lastCheckedZoomDist) > 1e-3 ||
+        controls.target.distanceToSquared(lastCheckedTarget) > 1e-6
+      ) {
+        cameraMoved = true;
+        lastCheckedZoomDist = curZoomDist;
+        lastCheckedTarget.copy(controls.target);
+        if (typeof syncZoomUI === "function") syncZoomUI();
+      }
+
+      // Dynamic Camera-Distance Sorting for Transparent Rendering (only when camera moved)
+      if (lobeKeys.length > 0 && (needsRenderOrderSort || camera.position.distanceToSquared(lastSortCamPos) > 1e-4)) {
+        cameraMoved = true;
+        needsRenderOrderSort = false;
+        lastSortCamPos.copy(camera.position);
+        lobeKeys.sort((a, b) => {
+          const distA = lobeMeshes[a].userData.centroid.distanceToSquared(camera.position);
+          const distB = lobeMeshes[b].userData.centroid.distanceToSquared(camera.position);
+          return distB - distA; // Farthest first, closest last
+        });
+        for (let i = 0; i < lobeKeys.length; i++) {
+          const k = lobeKeys[i];
+          lobeMeshes[k].renderOrder = 10 + i;
+          if (lobeEdges[k]) lobeEdges[k].renderOrder = 10 + i;
+        }
+      }
+
+      const sliderOpacity = cachedOutlineOpacity;
+      const opacityChanged = Math.abs(sliderOpacity - lastRenderedSliderOpacity) > 1e-4;
+
+      // Determine outline color matching currently most active band (fallback to default INACTIVE_EDGE_OBJ)
+      let activeBandKey = null;
+      if (selectedBandMode !== "all" && isBandEnabled(selectedBandMode) && BAND_COLORS[selectedBandMode] !== undefined) {
+        activeBandKey = selectedBandMode;
+      } else if (lastGlobalDominant && isBandEnabled(lastGlobalDominant) && BAND_COLORS[lastGlobalDominant] !== undefined) {
+        activeBandKey = lastGlobalDominant;
+      }
+
+      if (activeBandKey && BAND_COLORS[activeBandKey] !== undefined) {
+        targetOutlineColor.setHex(BAND_COLORS[activeBandKey]);
+      } else {
+        targetOutlineColor.copy(INACTIVE_EDGE_OBJ);
+      }
+
+      // Smoothly interpolate outline color to ensure transitions are smooth when active band shifts
+      currentOutlineColor.lerp(targetOutlineColor, Math.min(1.0, delta * 4.0));
+
+      // Smoothly interpolate lobe activation, matter brightness, and outline visibility
+      const lerpStep = Math.min(1.0, delta * 5.5);
+      let maxActDelta = 0.0;
+      for (let i = 0; i < lobeKeys.length; i++) {
+        const key = lobeKeys[i];
+        const mesh = lobeMeshes[key];
+        const u = mesh.userData;
+        if (u.config && u.config.interpolatedFrom) continue;
+
+        const dAct = Math.abs(u.targetAct - u.currentAct);
+        if (dAct > maxActDelta) maxActDelta = dAct;
+        // Smooth LERP for both activity and color (no threshold jumps)
+        u.currentAct += (u.targetAct - u.currentAct) * lerpStep;
+        if (!u.colorInitialized && u.targetColor.getHex() !== 0x000000) {
+          u.currentColor.copy(u.targetColor);
+          u.colorInitialized = true;
+        } else {
+          u.currentColor.lerp(u.targetColor, lerpStep);
+        }
+
+        const act = Math.max(0.0, Math.min(1.0, u.currentAct));
+        const glowFactor = Math.pow(act, 1.35);
+        const volumeDensity = Math.pow(act, 0.6);
+
+        const mat = mesh.material;
+        const edge = lobeEdges[key].material;
+
+        // Let directional lights sculpt active lobes via diffuse color while keeping peak glow via emissive
+        mat.opacity = 0.14 + volumeDensity * 0.72;
+        mat.color.copy(INACTIVE_COLOR_OBJ).lerp(u.currentColor, 0.15 + act * 0.85);
+        mat.emissive.copy(u.currentColor);
+        mat.emissiveIntensity = act * 0.35 + glowFactor * 1.45;
+
+        // Outlines stay at a stable value corresponding only to the Visual Controls slider,
+        // and match the color of the currently most active band
+        edge.opacity = sliderOpacity;
+        edge.visible = sliderOpacity > 0.001;
+        edge.color.copy(currentOutlineColor);
+      }
+
+      // Update interpolated dorsal crown meshes from their 4 same-hemisphere active neighbors
+      for (let i = 0; i < lobeKeys.length; i++) {
+        const key = lobeKeys[i];
+        const mesh = lobeMeshes[key];
+        const u = mesh.userData;
+        if (!u.config || !u.config.interpolatedFrom || !u.interpUniforms) continue;
+
+        const nKeys = u.config.interpolatedFrom;
+        let actSum = 0.0;
+        let nCount = 0;
+        for (let k = 0; k < 4; k++) {
+          const nMesh = lobeMeshes[nKeys[k]];
+          const nAct = nMesh ? Math.max(0.0, Math.min(1.0, nMesh.userData.currentAct)) : 0.0;
+          const nCol = nMesh ? nMesh.userData.currentColor : INACTIVE_COLOR_OBJ;
+          u.interpUniforms["uNeighborColor" + k].value.copy(nCol);
+          u.interpUniforms.uNeighborActs.value.setComponent(k, nAct);
+          actSum += nAct;
+          nCount++;
+        }
+        u.currentAct = nCount > 0 ? actSum / nCount : 0.0;
+
+        const edge = lobeEdges[key].material;
+        edge.opacity = sliderOpacity;
+        edge.visible = sliderOpacity > 0.001;
+        edge.color.copy(currentOutlineColor);
+      }
+
+      // Noncortical structures only need updates when outline slider changes
+      if (opacityChanged) {
+        lastRenderedSliderOpacity = sliderOpacity;
+        for (let i = 0; i < noncorticalEdges.length; i++) {
+          const nEdge = noncorticalEdges[i];
+          nEdge.material.opacity = sliderOpacity * 0.65;
+          nEdge.material.visible = sliderOpacity > 0.001;
+          nEdge.material.color.copy(INACTIVE_EDGE_OBJ);
+        }
+      }
+
+      const nowMs = performance.now();
+      if (bandGraphsDirty && nowMs - lastGraphRenderMs >= GRAPH_RENDER_INTERVAL_MS) {
+        renderAllBandGraphs();
+      }
+
+      updateHoverTooltip(nowMs);
+
+      const isActiveScene =
+        hadNewData ||
+        cameraMoved ||
+        opacityChanged ||
+        controls.autoRotate ||
+        isOrbitDragging ||
+        pointerDirty ||
+        maxActDelta > 5e-4 ||
+        (!isStreamPaused && isStreamActive);
+
+      if (!isActiveScene && nowMs - lastIdleRenderMs < 120) {
+        return;
+      }
+      lastIdleRenderMs = nowMs;
+
+      // Gentle floating animation of particles
+      particles.rotation.y = time * 0.02;
+
+      // Render through UnrealBloom Composer (skip post-processing pass if bloom is off)
+      if (bloomPass && bloomPass.strength > 0.01) {
+        composer.render();
+      } else {
+        renderer.render(scene, camera);
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // UI Event Listeners (Band Selection, Sliders, Calibration)
+    // -------------------------------------------------------------------------
+    document.querySelectorAll(".band-btn").forEach(btn => {
+      const band = btn.dataset.band;
+      const swatch = btn.querySelector(".band-swatch");
+
+      // Swatch (colored dot) toggle handler:
+      // Clicking the dot disables the band (grayscale + disappears from all bands view) or activates it
+      if (swatch && band !== "all") {
+        swatch.title = `Disable ${band.toUpperCase()} band`;
+        swatch.setAttribute("aria-label", `Toggle ${band} band`);
+        swatch.addEventListener("click", (e) => {
+          e.stopPropagation(); // Do not trigger line click
+          const willEnable = !isBandEnabled(band);
+          setBandEnabled(band, willEnable);
+        });
+      }
+
+      // Whole line click handler:
+      // When clicked again or when disabled, activates the band AND selects it only
+      btn.addEventListener("click", () => {
+        const wasDisabled = band !== "all" && !isBandEnabled(band);
+        const wasActive = btn.classList.contains("active");
+        const wasExpanded = btn.classList.contains("expanded");
+
+        if (wasDisabled) {
+          // Both activate the band and select it only
+          bandEnabledState[band] = true;
+          btn.classList.remove("band-disabled");
+          if (swatch) {
+            swatch.title = `Disable ${band.toUpperCase()} band`;
+            swatch.setAttribute("aria-label", `Disable ${band} band`);
+          }
+        }
+
+        document.querySelectorAll(".band-btn").forEach(b => {
+          b.classList.remove("active");
+          b.classList.remove("expanded");
+        });
+        btn.classList.add("active");
+        if (wasDisabled || !wasActive || !wasExpanded) {
+          btn.classList.add("expanded");
+        }
+        selectedBandMode = band;
+        if (currentEEGData) onBrainDataReceived(currentEEGData);
+        renderAllBandGraphs(true);
+      });
+    });
+
+    renderAllBandGraphs(true);
+
+    document.getElementById("bloomSlider").addEventListener("input", (e) => {
+      if (bloomPass) bloomPass.strength = parseFloat(e.target.value);
+    });
+
+    document.getElementById("outlineSlider").addEventListener("input", (e) => {
+      const v = parseFloat(e.target.value);
+      cachedOutlineOpacity = isNaN(v) ? 0.3 : v;
+    });
+
+    document.getElementById("autoRotateCheck").addEventListener("change", (e) => {
+      controls.autoRotate = e.target.checked;
+    });
+
+    const zoomSlider = document.getElementById("zoomSlider");
+    const zoomValueEl = document.getElementById("zoomValue");
+    let isZoomSliderActive = false;
+
+    function distanceToZoomFactor(dist) {
+      return DEFAULT_CAMERA_DISTANCE / Math.max(0.1, dist);
+    }
+
+    function zoomSliderToFactor(sliderVal) {
+      return Math.pow(2, (sliderVal - 50) / 50);
+    }
+
+    function zoomFactorToSlider(factor) {
+      return Math.min(100, Math.max(0, Math.round(50 + 50 * Math.log2(Math.max(0.1, factor)))));
+    }
+
+    function syncZoomUI() {
+      const dist = camera.position.distanceTo(controls.target);
+      const factor = distanceToZoomFactor(dist);
+      const pct = Math.round(factor * 100);
+      setCachedText(zoomValueEl, "_zoomPct", pct + "%");
+      if (!isZoomSliderActive && zoomSlider) {
+        const targetSlider = String(zoomFactorToSlider(factor));
+        if (zoomSlider.value !== targetSlider) {
+          zoomSlider.value = targetSlider;
+        }
+      }
+    }
+
+    if (zoomSlider) {
+      const applyZoomFromSlider = () => {
+        const raw = parseFloat(zoomSlider.value);
+        const factor = zoomSliderToFactor(isNaN(raw) ? 50 : raw);
+        const targetDist = Math.min(
+          controls.maxDistance,
+          Math.max(controls.minDistance, DEFAULT_CAMERA_DISTANCE / factor)
+        );
+        _zoomOffsetVec.subVectors(camera.position, controls.target);
+        if (_zoomOffsetVec.lengthSq() < 1e-8) {
+          _zoomOffsetVec.copy(DEFAULT_CAMERA_POS);
+        }
+        _zoomOffsetVec.normalize().multiplyScalar(targetDist);
+        camera.position.copy(controls.target).add(_zoomOffsetVec);
+        controls.update();
+        lastCheckedZoomDist = camera.position.distanceTo(controls.target);
+        lastCheckedTarget.copy(controls.target);
+        setCachedText(zoomValueEl, "_zoomPct", Math.round(distanceToZoomFactor(lastCheckedZoomDist) * 100) + "%");
+      };
+      zoomSlider.addEventListener("pointerdown", () => { isZoomSliderActive = true; });
+      window.addEventListener("pointerup", () => { isZoomSliderActive = false; });
+      zoomSlider.addEventListener("input", applyZoomFromSlider);
+      zoomSlider.addEventListener("change", () => {
+        isZoomSliderActive = false;
+        applyZoomFromSlider();
+      });
+    }
+
+    // Prevent browser/WebEngine page zoom (e.g. Ctrl+wheel or trackpad pinch over HUD windows)
+    // so zooming only affects the 3D brain, not the HUD window sizes.
+    window.addEventListener("wheel", (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    document.getElementById("btnPause").addEventListener("click", () => {
+      togglePause();
+    });
+
+    // Interactive Timeline Scrubbing / Seeking
+    const progressBarEl = document.getElementById("playbackProgressBar");
+    function seekFromEvent(e, forceSend = false) {
+      if (!progressBarEl) return;
+      const rect = progressBarEl.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const clientX = (e.touches && e.touches.length > 0) ? e.touches[0].clientX : e.clientX;
+      if (typeof clientX !== "number") return;
+      const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+      const dur = (currentEEGData && currentEEGData.duration_sec > 0) ? currentEEGData.duration_sec : lastKnownDuration;
+      const targetSec = dur > 0 ? ratio * dur : null;
+
+      setPlaybackBarRatio(ratio);
+      if (domCache.playbackElapsed && targetSec !== null) {
+        setCachedText(domCache.playbackElapsed, "elapsed", `${formatClockSec(targetSec)} / ${formatClockSec(dur)}`);
+      }
+
+      const now = performance.now();
+      if (forceSend || now - lastSeekFetchTime > 50) {
+        lastSeekFetchTime = now;
+        const seq = ++seekSequence;
+        seekPendingSince = now;
+        pendingSSEData = null;
+        const payload = targetSec !== null ? { elapsed_sec: targetSec, progress: ratio } : { progress: ratio };
+        fetch("/api/seek", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        })
+          .then(r => r.json())
+          .then(res => {
+            if (seq !== seekSequence) return;
+            seekPendingSince = 0;
+            if (res && res.frame) {
+              onBrainDataReceived(res.frame);
+            }
+          })
+          .catch(err => {
+            if (seq === seekSequence) seekPendingSince = 0;
+            console.error("Seek error", err);
+          });
+      }
+    }
+
+    if (progressBarEl) {
+      const startScrub = (e) => {
+        if (e.button !== undefined && e.button !== 0) return;
+        const dur = (currentEEGData && currentEEGData.duration_sec > 0) ? currentEEGData.duration_sec : lastKnownDuration;
+        if (!(dur > 0) || (currentEEGData && currentEEGData.can_seek === false)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        isScrubbing = true;
+        progressBarEl.classList.add("scrubbing");
+        seekFromEvent(e, true);
+      };
+
+      const moveScrub = (e) => {
+        if (!isScrubbing) return;
+        e.preventDefault();
+        seekFromEvent(e, false);
+      };
+
+      const endScrub = (e) => {
+        if (!isScrubbing) return;
+        seekFromEvent(e, true);
+        isScrubbing = false;
+        progressBarEl.classList.remove("scrubbing");
+        if (typeof revealPanels === "function" && isAutoHideMode() && !arePanelsStillHovered()) {
+          revealPanels(false);
+        }
+      };
+
+      progressBarEl.addEventListener("mousedown", startScrub);
+      window.addEventListener("mousemove", moveScrub);
+      window.addEventListener("mouseup", endScrub);
+      window.addEventListener("blur", endScrub);
+
+      progressBarEl.addEventListener("touchstart", startScrub, { passive: false });
+      window.addEventListener("touchmove", moveScrub, { passive: false });
+      window.addEventListener("touchend", endScrub);
+      window.addEventListener("touchcancel", endScrub);
+    }
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "F11") {
+        e.preventDefault();
+        toggleFullscreen(true);
+        return;
+      }
+      if (e.key === "Escape") {
+        const isFsNow = !!(document.fullscreenElement || document.webkitFullscreenElement || document.body.classList.contains("fullscreen-mode"));
+        if (isFsNow) {
+          e.preventDefault();
+          toggleFullscreen(false);
+          return;
+        }
+      }
+      if (!document.activeElement || !["INPUT", "BUTTON", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) {
+        if (e.code === "Space") {
+          e.preventDefault();
+          togglePause();
+        } else if (e.key === "f" || e.key === "F") {
+          e.preventDefault();
+          toggleFullscreen();
+        }
+      }
+    });
+
+    let isBaselineLocked = false;
+    let isCalibratingActive = false;
+
+    const btnCalibrate = document.getElementById("btnCalibrate");
+    btnCalibrate.addEventListener("click", () => {
+      if (isCalibratingActive) return;
+
+      if (isBaselineLocked) {
+        // Unlock and return to auto-rolling baseline
+        fetch("/api/calibrate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reset: true })
+        })
+          .then(r => r.json())
+          .then(() => {
+            isBaselineLocked = false;
+            btnCalibrate.textContent = "Calibrate 5s Baseline";
+            btnCalibrate.style.borderColor = "rgba(56, 189, 248, 0.4)";
+            btnCalibrate.style.color = "#38bdf8";
+          })
+          .catch(err => console.error("Reset baseline error", err));
+        return;
+      }
+
+      // Start 5-second baseline capture and lock
+      isCalibratingActive = true;
+      btnCalibrate.textContent = "CALIBRATING (5s)...";
+      btnCalibrate.style.borderColor = "#eab308";
+      btnCalibrate.style.color = "#eab308";
+
+      fetch("/api/calibrate", { method: "POST" })
+        .then(r => r.json())
+        .then(() => {
+          setTimeout(() => {
+            isCalibratingActive = false;
+            isBaselineLocked = true;
+            btnCalibrate.textContent = "🔒 Locked Baseline (Reset)";
+            btnCalibrate.style.borderColor = "#22c55e";
+            btnCalibrate.style.color = "#22c55e";
+          }, 5000);
+        })
+        .catch(err => {
+          isCalibratingActive = false;
+          console.error("Calibration error", err);
+          btnCalibrate.textContent = "Calibrate 5s Baseline";
+          btnCalibrate.style.borderColor = "rgba(56, 189, 248, 0.4)";
+          btnCalibrate.style.color = "#38bdf8";
+        });
+    });
+
+    // -------------------------------------------------------------------------
+    // Fullscreen & Narrow Window Auto-Hide Mode + Interactive Edge Drawer System
+    // -------------------------------------------------------------------------
+    const DEFAULT_PANEL_WIDTH = 280;
+    const MIN_PANEL_WIDTH = 232;
+    const PANEL_OUTER_MARGIN = 24;
+
+    const statusBadgeEl = document.querySelector(".status-badge.hud");
+    const sidebarEl = document.querySelector(".sidebar.hud");
+    const inspectorEl = document.querySelector(".inspector.hud");
+    const edgeTriggerLeft = document.getElementById("edgeTriggerLeft");
+    const edgeTriggerRight = document.getElementById("edgeTriggerRight");
+    const btnFullscreen = document.getElementById("btnFullscreen");
+
+    let currentPanelWidth = DEFAULT_PANEL_WIDTH;
+    let panelsHideTimer = null;
+    let fullscreenTransitionCooldown = false;
+
+    function applyPanelWidth(widthPx) {
+      const w = Math.round(widthPx);
+      if (w === currentPanelWidth) return;
+      currentPanelWidth = w;
+      if (sidebarEl) sidebarEl.style.width = w + "px";
+      if (inspectorEl) inspectorEl.style.width = w + "px";
+      invalidateHudMetrics();
+    }
+
+    function isAutoHideMode() {
+      return (
+        document.body.classList.contains("fullscreen-mode") ||
+        document.body.classList.contains("narrow-mode")
+      );
+    }
+
+    function arePanelsStillHovered() {
+      return (
+        (sidebarEl && sidebarEl.matches(":hover")) ||
+        (inspectorEl && inspectorEl.matches(":hover")) ||
+        (statusBadgeEl && statusBadgeEl.matches(":hover")) ||
+        (edgeTriggerLeft && edgeTriggerLeft.matches(":hover")) ||
+        (edgeTriggerRight && edgeTriggerRight.matches(":hover")) ||
+        isScrubbing
+      );
+    }
+
+    function updateNarrowMode() {
+      // Evaluate side-panel fit against the unzoomed, centered brain framing so
+      // zooming or panning the 3D brain never resizes or hides the side windows.
+      const dist = DEFAULT_CAMERA_DISTANCE;
+      const halfFovTan = Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5));
+      const r = brainHalfWidthWorld;
+
+      let brainHalfWidthPx;
+      if (dist <= r + 0.05) {
+        brainHalfWidthPx = window.innerWidth;
+      } else {
+        const tanAlpha = r / Math.sqrt(dist * dist - r * r);
+        brainHalfWidthPx = (tanAlpha / halfFovTan) * (window.innerHeight * 0.5);
+      }
+
+      const brainCenterPx = window.innerWidth * 0.5;
+
+      const spaceLeft = (brainCenterPx - brainHalfWidthPx) - PANEL_OUTER_MARGIN;
+      const spaceRight = (window.innerWidth - PANEL_OUTER_MARGIN) - (brainCenterPx + brainHalfWidthPx);
+      const fittingWidth = Math.floor(Math.min(spaceLeft, spaceRight));
+
+      const currentlyNarrow = document.body.classList.contains("narrow-mode");
+      const minRequired = currentlyNarrow ? (MIN_PANEL_WIDTH + 6) : MIN_PANEL_WIDTH;
+      const fitsWithShrunkPanels = fittingWidth >= minRequired;
+      const shouldBeNarrow = !fitsWithShrunkPanels;
+
+      if (shouldBeNarrow !== currentlyNarrow) {
+        document.body.classList.toggle("narrow-mode", shouldBeNarrow);
+        if (!isAutoHideMode()) {
+          if (panelsHideTimer) { clearTimeout(panelsHideTimer); panelsHideTimer = null; }
+          if (sidebarEl) sidebarEl.classList.remove("revealed");
+          if (inspectorEl) inspectorEl.classList.remove("revealed");
+          if (statusBadgeEl) statusBadgeEl.classList.remove("revealed");
+          if (bandGraphsDirty) renderAllBandGraphs(true);
+        }
+      }
+
+      if (document.body.classList.contains("fullscreen-mode") || shouldBeNarrow) {
+        const maxOverlayWidth = Math.max(MIN_PANEL_WIDTH, Math.floor((window.innerWidth - 64) / 2));
+        applyPanelWidth(Math.min(DEFAULT_PANEL_WIDTH, maxOverlayWidth));
+      } else {
+        applyPanelWidth(Math.min(DEFAULT_PANEL_WIDTH, fittingWidth));
+      }
+    }
+
+    // OrbitControls drag detection to avoid drawer popping while actively orbiting
+    if (typeof controls !== "undefined" && controls) {
+      controls.addEventListener("start", () => { isOrbitDragging = true; });
+      controls.addEventListener("end", () => { isOrbitDragging = false; });
+    }
+
+    function revealPanels(show) {
+      if (!isAutoHideMode()) return;
+      if (fullscreenTransitionCooldown) return;
+      if (show) {
+        if (panelsHideTimer) {
+          clearTimeout(panelsHideTimer);
+          panelsHideTimer = null;
+        }
+        if (!isOrbitDragging) {
+          if (sidebarEl) sidebarEl.classList.add("revealed");
+          if (inspectorEl) inspectorEl.classList.add("revealed");
+          if (statusBadgeEl && document.body.classList.contains("fullscreen-mode")) {
+            statusBadgeEl.classList.add("revealed");
+          }
+          if (bandGraphsDirty) renderAllBandGraphs(true);
+        }
+      } else {
+        if (!panelsHideTimer) {
+          panelsHideTimer = setTimeout(() => {
+            panelsHideTimer = null;
+            if (!arePanelsStillHovered()) {
+              if (sidebarEl) sidebarEl.classList.remove("revealed");
+              if (inspectorEl) inspectorEl.classList.remove("revealed");
+              if (statusBadgeEl) statusBadgeEl.classList.remove("revealed");
+            }
+          }, 320);
+        }
+      }
+    }
+
+    if (edgeTriggerLeft) {
+      edgeTriggerLeft.addEventListener("mouseenter", () => revealPanels(true));
+      edgeTriggerLeft.addEventListener("mouseleave", () => revealPanels(false));
+      edgeTriggerLeft.addEventListener("touchstart", () => revealPanels(true), { passive: true });
+    }
+    if (sidebarEl) {
+      sidebarEl.addEventListener("mouseenter", () => revealPanels(true));
+      sidebarEl.addEventListener("mouseleave", () => revealPanels(false));
+    }
+
+    if (edgeTriggerRight) {
+      edgeTriggerRight.addEventListener("mouseenter", () => revealPanels(true));
+      edgeTriggerRight.addEventListener("mouseleave", () => revealPanels(false));
+      edgeTriggerRight.addEventListener("touchstart", () => revealPanels(true), { passive: true });
+    }
+    if (inspectorEl) {
+      inspectorEl.addEventListener("mouseenter", () => revealPanels(true));
+      inspectorEl.addEventListener("mouseleave", () => revealPanels(false));
+    }
+    if (statusBadgeEl) {
+      statusBadgeEl.addEventListener("mouseenter", () => revealPanels(true));
+      statusBadgeEl.addEventListener("mouseleave", () => revealPanels(false));
+    }
+
+    // Precise cursor edge detection across the viewport
+    window.addEventListener("mousemove", (e) => {
+      if (!isAutoHideMode() || isOrbitDragging || fullscreenTransitionCooldown) return;
+
+      // Either left or right edge hover reveals both side windows
+      if (e.clientX <= 28 || e.clientX >= window.innerWidth - 28) {
+        revealPanels(true);
+        return;
+      }
+
+      const anyRevealed =
+        (sidebarEl && sidebarEl.classList.contains("revealed")) ||
+        (inspectorEl && inspectorEl.classList.contains("revealed")) ||
+        (statusBadgeEl && statusBadgeEl.classList.contains("revealed"));
+      if (anyRevealed && !arePanelsStillHovered()) {
+        const leftRect = sidebarEl ? sidebarEl.getBoundingClientRect() : null;
+        const rightRect = inspectorEl ? inspectorEl.getBoundingClientRect() : null;
+        const nearLeft = leftRect ? e.clientX <= leftRect.right + 24 : false;
+        const nearRight = rightRect ? e.clientX >= rightRect.left - 24 : false;
+        if (!nearLeft && !nearRight) {
+          revealPanels(false);
+        }
+      }
+    });
+
+    document.addEventListener("mouseleave", () => {
+      if (isAutoHideMode()) {
+        revealPanels(false);
+      }
+    });
+
+    function setFullscreenUI(active) {
+      if (active) {
+        fullscreenTransitionCooldown = true;
+        document.body.classList.add("fullscreen-mode");
+        if (panelsHideTimer) { clearTimeout(panelsHideTimer); panelsHideTimer = null; }
+        if (sidebarEl) sidebarEl.classList.remove("revealed");
+        if (inspectorEl) inspectorEl.classList.remove("revealed");
+        if (statusBadgeEl) statusBadgeEl.classList.remove("revealed");
+        if (btnFullscreen) {
+          btnFullscreen.textContent = "⛶ Exit Fullscreen";
+          btnFullscreen.classList.add("fullscreen-active");
+        }
+        updateNarrowMode();
+        setTimeout(() => {
+          fullscreenTransitionCooldown = false;
+        }, 450);
+      } else {
+        fullscreenTransitionCooldown = false;
+        document.body.classList.remove("fullscreen-mode");
+        if (panelsHideTimer) { clearTimeout(panelsHideTimer); panelsHideTimer = null; }
+        if (sidebarEl) sidebarEl.classList.remove("revealed");
+        if (inspectorEl) inspectorEl.classList.remove("revealed");
+        if (statusBadgeEl) statusBadgeEl.classList.remove("revealed");
+        if (btnFullscreen) {
+          btnFullscreen.textContent = "⛶ Fullscreen";
+          btnFullscreen.classList.remove("fullscreen-active");
+        }
+        updateNarrowMode();
+        if (!isAutoHideMode() && bandGraphsDirty) renderAllBandGraphs(true);
+      }
+    }
+
+    function toggleFullscreen(forceState) {
+      const isFsNow = !!(document.fullscreenElement || document.webkitFullscreenElement || document.body.classList.contains("fullscreen-mode"));
+      const targetState = (forceState !== undefined) ? forceState : !isFsNow;
+
+      if (targetState) {
+        const el = document.documentElement;
+        if (el.requestFullscreen) {
+          el.requestFullscreen().catch(() => {});
+        } else if (el.webkitRequestFullscreen) {
+          el.webkitRequestFullscreen();
+        }
+        setFullscreenUI(true);
+      } else {
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+          if (document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          }
+        }
+        setFullscreenUI(false);
+      }
+    }
+
+    if (btnFullscreen) {
+      btnFullscreen.addEventListener("click", () => {
+        toggleFullscreen();
+      });
+    }
+
+    document.addEventListener("fullscreenchange", () => {
+      const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      setFullscreenUI(isFs);
+    });
+    document.addEventListener("webkitfullscreenchange", () => {
+      const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      setFullscreenUI(isFs);
+    });
+
+    // Window Resize Handling
+    window.addEventListener("resize", () => {
+      renderDpr = computeRenderDpr();
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setPixelRatio(renderDpr);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      composer.setPixelRatio(renderDpr);
+      composer.setSize(window.innerWidth, window.innerHeight);
+      invalidateHudMetrics();
+      updateNarrowMode();
+      renderAllBandGraphs(true);
+    });
+
+    syncZoomUI();
+    updateNarrowMode();
+    animate();
+  </script>
+</body>
+</html>

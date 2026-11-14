@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtualenvs
+venv/
+.venv/
+env/
+
+# Editor / local history artifacts
+.history*
+.vscode/
+.idea/
+
+# Archives
+*.zip
+
+# Captures and logs (device-specific, except bundled demo recording)
+*.csv
+*.log
+recordings/*
+!recordings/
+!recordings/eeg_recording.csv
+
+# Per-device secrets -- NEVER commit (keys/whitening bytes are per headset)
+KEYS.txt
+*.key
+
+# OS
+.DS_Store
