@@ -1,9 +1,9 @@
-"""Local CSV stream broker and session controller for EPOC-X Studio.
+"""Local CSV stream broker and session controller for prestEEG.
 
 Owns a single active stream source (either live BLE via ``Recorder`` or
 real-time CSV replay) and fans every CSV line out simultaneously to:
-  * connected local TCP clients (``epoc-live-viewer --connect``,
-    ``epoc-headmap --connect``, ``epoc-brain-map --connect``),
+  * connected local TCP clients (``presteeg-live-viewer --connect``,
+    ``presteeg-headmap --connect``, ``presteeg-brain-map --connect``),
   * an optional on-disk CSV recording (toggled on/off mid-stream without
     interrupting BLE or open viewers),
   * an optional timed-notes CSV (``<recording>.notes.csv``).
@@ -204,7 +204,7 @@ def load_notes_csv(notes_file: str) -> list[tuple[int, int, str]]:
 class LineQueueStream:
     """Thread-safe iterable/readline stream backed by a bounded queue.
 
-    Used by in-process EPOC-X Studio windows so they consume the exact same
+    Used by in-process prestEEG windows so they consume the exact same
     CSV line format as ``CsvBrokerServer`` without opening loopback sockets.
     """
 

@@ -1,4 +1,4 @@
-"""CLI entry point for ``epoc-take-notes`` (timed free-text notes alongside recordings)."""
+"""CLI entry point for ``presteeg-take-notes`` (timed free-text notes alongside recordings)."""
 from __future__ import annotations
 
 import argparse
@@ -133,7 +133,7 @@ def read_notes_pipe():
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
-        prog="epoc-take-notes",
+        prog="presteeg-take-notes",
         description="Record timestamped event notes into <recording>.notes.csv.",
     )
     ap.add_argument("recording", help="Path to the EEG recording CSV (or prefix)")

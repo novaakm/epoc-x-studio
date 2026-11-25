@@ -1,4 +1,4 @@
-"""CLI entry points for ``epoc-from-lsl`` and ``epoc-save-lsl``."""
+"""CLI entry points for ``presteeg-from-lsl`` and ``presteeg-save-lsl``."""
 from __future__ import annotations
 
 import argparse
@@ -48,8 +48,8 @@ def resolve_lsl(name: str, stype: str, timeout: float):
 
 def from_lsl_main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
-        prog="epoc-from-lsl",
-        description="Consume an EPOC-X Lab Streaming Layer stream and emit live-viewer CSV.",
+        prog="presteeg-from-lsl",
+        description="Consume a Lab Streaming Layer EEG stream and emit live-viewer CSV.",
     )
     ap.add_argument(
         "--name",
@@ -73,7 +73,7 @@ def from_lsl_main(argv: list[str] | None = None) -> int:
     try:
         from pylsl import StreamInlet
     except ImportError as e:
-        print(f"error: epoc-from-lsl needs pylsl (pip install pylsl): {e}", file=sys.stderr)
+        print(f"error: presteeg-from-lsl needs pylsl (pip install pylsl): {e}", file=sys.stderr)
         return 2
 
     print(
@@ -84,7 +84,7 @@ def from_lsl_main(argv: list[str] | None = None) -> int:
     streams = resolve_lsl(args.name, args.stype, args.resolve_timeout)
     if not streams:
         print(
-            "# no matching LSL stream found (is `epoc-direct-record --lsl` running?)",
+            "# no matching LSL stream found (is `presteeg-record --lsl` running?)",
             file=sys.stderr,
         )
         return 1
@@ -185,8 +185,8 @@ class LslSaver:
 
 def save_lsl_main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
-        prog="epoc-save-lsl",
-        description="Save one or more EPOC-X LSL streams to per-device CSV files.",
+        prog="presteeg-save-lsl",
+        description="Save one or more LSL EEG streams to per-device CSV files.",
     )
     ap.add_argument("names", nargs="+", help="LSL stream names to save")
     ap.add_argument("--outdir", default=".", help="output directory")
@@ -201,7 +201,7 @@ def save_lsl_main(argv: list[str] | None = None) -> int:
     try:
         import pylsl  # noqa: F401
     except ImportError as e:
-        print(f"error: epoc-save-lsl needs pylsl (pip install pylsl): {e}", file=sys.stderr)
+        print(f"error: presteeg-save-lsl needs pylsl (pip install pylsl): {e}", file=sys.stderr)
         return 2
 
     os.makedirs(args.outdir, exist_ok=True)

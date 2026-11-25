@@ -10,11 +10,11 @@ if "%1"=="" (
 )
 
 echo ========================================================
-echo   Emotiv EPOC-X Direct Recorder
+echo   prestEEG Recorder
 echo   Saving to: %OUT%
 echo   Searching for EPOC-X headset (keys from KEYS.txt)...
 echo   Press Ctrl+C anytime to stop recording.
 echo ========================================================
 echo.
 
-.\venv\Scripts\epoc-direct-record.exe > "%OUT%"
+.\venv\Scripts\presteeg-record.exe > "%OUT%"

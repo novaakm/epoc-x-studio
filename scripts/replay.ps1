@@ -15,4 +15,4 @@ if (-not $InputFile) {
 $NotesFile = if ($InputFile.EndsWith(".csv")) { $InputFile.Substring(0, $InputFile.Length - 4) + ".notes.csv" } else { $InputFile + ".notes.csv" }
 
 Write-Host "Replaying $InputFile in real-time..." -ForegroundColor Cyan
-cmd /c "type `"$InputFile`"" | & .\venv\Scripts\epoc-live-viewer.exe --group 5-18 --group 19-25 --width 5s --realtime-replay --notes $NotesFile
+cmd /c "type `"$InputFile`"" | & .\venv\Scripts\presteeg-live-viewer.exe --group 5-18 --group 19-25 --width 5s --realtime-replay --notes $NotesFile

@@ -13,10 +13,10 @@ if (-not $InputFile) {
 }
 
 Write-Host "========================================================" -ForegroundColor Cyan
-Write-Host "  EPOC-X 3D Holographic Brain Activity Streamer" -ForegroundColor Cyan
+Write-Host "  prestEEG 3D Brain Activity Streamer" -ForegroundColor Cyan
 Write-Host "  MODE: Replaying $InputFile in real-time" -ForegroundColor Gray
 Write-Host "  Opening native 3D Brain Map desktop window..." -ForegroundColor Yellow
 Write-Host "  Press Ctrl+C in this terminal to stop." -ForegroundColor Gray
 Write-Host "========================================================" -ForegroundColor Cyan
 
-& .\venv\Scripts\epoc-brain-map.exe --replay "$InputFile"
+& .\venv\Scripts\presteeg-brain-map.exe --replay "$InputFile"

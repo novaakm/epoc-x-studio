@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "epoc-x-studio"
+name = "presteeg"
 version = "1.0.0"
-description = "EPOC-X Studio: unified Emotiv EPOC-X EEG acquisition, live waveforms, headmap, 3D brain map, and CSV compare desktop app"
+description = "prestEEG: unified EEG acquisition, live waveforms, headmap, 3D brain map, LSL web server, and CSV compare desktop suite"
 readme = "README.md"
 authors = [
     { name = "Michal Novák" },
@@ -25,26 +25,33 @@ dependencies = [
 lsl = ["pylsl>=1.16"]
 
 [project.scripts]
-epoc-direct-record = "epoc_direct.record_cli:main"
-epoc-headmap = "epoc_studio.headmap_view:main"
-epoc-live-viewer = "epoc_studio.live_viewer_view:main"
-epoc-brain-map = "epoc_studio.brain_map_view:main"
-epoc-csv-compare = "epoc_studio.csv_compare_view:main"
-epoc-take-notes = "epoc_direct.notes_cli:main"
-epoc-probe-device = "epoc_direct.probe_cli:main"
-epoc-save-lsl = "epoc_direct.lsl_cli:save_lsl_main"
-epoc-from-lsl = "epoc_direct.lsl_cli:from_lsl_main"
-epoc-lsl-brain-server = "epoc_studio.lsl_brain_server:main"
+presteeg-record = "presteeg.record_cli:main"
+presteeg-headmap = "presteeg.headmap_view:main"
+presteeg-live-viewer = "presteeg.live_viewer_view:main"
+presteeg-brain-map = "presteeg.brain_map_view:main"
+presteeg-csv-compare = "presteeg.csv_compare_view:main"
+presteeg-take-notes = "presteeg.notes_cli:main"
+presteeg-save-lsl = "presteeg.lsl_cli:save_lsl_main"
+presteeg-from-lsl = "presteeg.lsl_cli:from_lsl_main"
+presteeg-lsl-brain-server = "presteeg.lsl_brain_server:main"
+# Compatibility entry points for external LSL / activity-logger integrations
+epoc-lsl-brain-server = "presteeg.lsl_brain_server:main"
+epoc-headmap = "presteeg.headmap_view:main"
+epoc-brain-map = "presteeg.brain_map_view:main"
+epoc-live-viewer = "presteeg.live_viewer_view:main"
+epoc-save-lsl = "presteeg.lsl_cli:save_lsl_main"
+epoc-from-lsl = "presteeg.lsl_cli:from_lsl_main"
+epoc-take-notes = "presteeg.notes_cli:main"
 
 [project.gui-scripts]
-epoc-studio = "epoc_studio.launcher:main"
+presteeg = "presteeg.launcher:main"
 
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["epoc_direct*", "epoc_studio*"]
+include = ["presteeg*", "epoc_studio*"]
 
 [tool.setuptools.package-data]
-epoc_studio = ["assets/*", "assets/vendor/three/*"]
+presteeg = ["assets/*", "assets/vendor/three/*"]

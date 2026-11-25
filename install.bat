@@ -31,7 +31,7 @@ set "EXIT_CODE=%errorlevel%"
 
 echo.
 if %EXIT_CODE% equ 0 (
-    echo EPOC-X Studio installed successfully!
+    echo prestEEG installed successfully!
     echo You can launch it from the Desktop/Start Menu shortcut or launcher.bat.
 ) else (
     echo [ERROR] Installation failed with exit code %EXIT_CODE%.

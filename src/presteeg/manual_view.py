@@ -1,4 +1,4 @@
-"""In-app offline Markdown manual viewer for EPOC-X Studio."""
+"""In-app offline Markdown manual viewer for prestEEG."""
 from __future__ import annotations
 
 import html
@@ -8,9 +8,9 @@ from typing import Callable, Optional
 
 from PyQt6 import QtCore, QtGui, QtWebEngineCore
 
-from epoc_direct.paths import get_repo_root
+from .paths import get_repo_root
 from .qt_common import apply_dark_titlebar, asset_path, ensure_qt_app, install_sigint_handler
-from .web_common import BaseWebWindow, StudioWebPage
+from .web_common import BaseWebWindow, PresteegWebPage
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 _FENCE_RE = re.compile(r"^\s*```([A-Za-z0-9_+-]*)\s*$")
@@ -389,7 +389,7 @@ def build_manual_html(
     *,
     is_subdoc: bool = False,
 ) -> str:
-    """Wrap a Markdown file in Studio's dark HTML shell with TOC and on-demand find."""
+    """Wrap a Markdown file in prestEEG's dark HTML shell with TOC and on-demand find."""
     md_text = doc_path.read_text(encoding="utf-8", errors="replace")
     body_html, toc = _markdown_to_html(md_text)
 
@@ -405,7 +405,7 @@ def build_manual_html(
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>EPOC-X Studio — {doc_label}</title>
+<title>prestEEG — {doc_label}</title>
 <style>
   :root {{
     --bg: #080d18;
@@ -901,7 +901,7 @@ function copyCode(btn) {{
 const backBtn = document.getElementById('backHomeBtn');
 if (backBtn) {{
   backBtn.addEventListener('click', () => {{
-    window.location.href = '__EPOC_MANUAL_HOME__';
+    window.location.href = '__PRESTEEG_MANUAL_HOME__';
   }});
 }}
 
@@ -1101,7 +1101,7 @@ document.getElementById('findCloseBtn').addEventListener('click', closeFindBar);
 </html>"""
 
 
-class _ManualWebPage(StudioWebPage):
+class _ManualWebPage(PresteegWebPage):
     """WebEngine page that opens external URLs in the OS browser and local docs in-app."""
 
     def __init__(self, home_path: Optional[Path], on_open_doc: Callable[[Path], None], parent=None):
@@ -1118,7 +1118,7 @@ class _ManualWebPage(StudioWebPage):
             return super().acceptNavigationRequest(url, nav_type, isMainFrame)
 
         raw = url.toString()
-        if raw.endswith("__EPOC_MANUAL_HOME__") and self._home_path is not None:
+        if raw.endswith("__PRESTEEG_MANUAL_HOME__") and self._home_path is not None:
             home = self._home_path
             QtCore.QTimer.singleShot(0, lambda p=home: self._on_open_doc(p))
             return False
@@ -1152,7 +1152,7 @@ def create_manual_window(
 ) -> BaseWebWindow:
     """Open the in-app User Manual inside a native dark-themed desktop window."""
     win = BaseWebWindow(
-        title="EPOC-X Studio — User Manual",
+        title="prestEEG — User Manual",
         bg_hex="#080d18",
         width=1140,
         height=820,
@@ -1165,7 +1165,7 @@ def create_manual_window(
     def _load_doc(target: Path) -> None:
         is_sub = home_path is not None and target.resolve() != home_path.resolve()
         page.set_current_doc(target)
-        win.setWindowTitle(f"EPOC-X Studio — {target.name}")
+        win.setWindowTitle(f"prestEEG — {target.name}")
         html_str = build_manual_html(target, is_subdoc=is_sub)
         win.view.setHtml(html_str, QtCore.QUrl.fromLocalFile(str(target)))
 

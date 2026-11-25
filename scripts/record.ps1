@@ -9,11 +9,11 @@ if (-not (Test-Path "recordings")) {
 }
 
 Write-Host "========================================================" -ForegroundColor Cyan
-Write-Host "  Emotiv EPOC-X Direct Recorder" -ForegroundColor Green
+Write-Host "  prestEEG Recorder" -ForegroundColor Green
 Write-Host "  Saving to: $OutputFile" -ForegroundColor Yellow
 Write-Host "  Searching for EPOC-X headset (keys from KEYS.txt)..." -ForegroundColor Yellow
 Write-Host "  Press Ctrl+C anytime to stop recording." -ForegroundColor Cyan
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host ""
 
-& .\venv\Scripts\epoc-direct-record.exe > $OutputFile
+& .\venv\Scripts\presteeg-record.exe > $OutputFile

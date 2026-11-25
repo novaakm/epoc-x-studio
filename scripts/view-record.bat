@@ -10,7 +10,7 @@ if "%1"=="" (
 )
 
 echo ========================================================
-echo   Emotiv EPOC-X Live Stream + Real-Time Visualization
+echo   prestEEG Live Stream + Real-Time Visualization
 echo   Saving to: %OUT%
 echo   Searching for EPOC-X headset (keys from KEYS.txt)...
 echo   Close the plot window or press Ctrl+C to stop.
@@ -25,4 +25,4 @@ for %%F in ("%OUT%") do (
     )
 )
 
-.\venv\Scripts\epoc-direct-record.exe --csv "%OUT%" | .\venv\Scripts\epoc-live-viewer.exe --group 5-18 --group 19-25 --width 5s --notes "%NOTES%"
+.\venv\Scripts\presteeg-record.exe --csv "%OUT%" | .\venv\Scripts\presteeg-live-viewer.exe --group 5-18 --group 19-25 --width 5s --notes "%NOTES%"

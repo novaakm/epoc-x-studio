@@ -19,4 +19,4 @@ for %%F in ("%IN%") do (
 )
 
 echo Replaying %IN% in real-time...
-type "%IN%" | .\venv\Scripts\epoc-live-viewer.exe --group 5-18 --group 19-25 --width 5s --realtime-replay --notes "%NOTES%"
+type "%IN%" | .\venv\Scripts\presteeg-live-viewer.exe --group 5-18 --group 19-25 --width 5s --realtime-replay --notes "%NOTES%"

@@ -7,11 +7,11 @@ from typing import Callable, Optional
 
 from PyQt6 import QtCore, QtGui, QtWebEngineCore, QtWebEngineWidgets, QtWidgets
 
-from epoc_direct.paths import get_recordings_dir
+from .paths import get_recordings_dir
 from .qt_common import apply_dark_titlebar, get_app_icon
 
 
-class StudioWebPage(QtWebEngineCore.QWebEnginePage):
+class PresteegWebPage(QtWebEngineCore.QWebEnginePage):
     """Custom QWebEnginePage with native recordings-folder file dialogs & fullscreen."""
 
     def __init__(
@@ -81,7 +81,7 @@ class BaseWebWindow(QtWidgets.QWidget):
         layout.setSpacing(0)
 
         self.view = QtWebEngineWidgets.QWebEngineView(self)
-        self.page = StudioWebPage(parent=self.view)
+        self.page = PresteegWebPage(parent=self.view)
         self.page.setBackgroundColor(QtGui.QColor(bg_hex))
 
         settings = self.page.settings()

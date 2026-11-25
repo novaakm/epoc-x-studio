@@ -1,7 +1,7 @@
 @echo off
 cd /d "%~dp0"
-if exist .\venv\Scripts\epoc-studio.exe (
-    start "" .\venv\Scripts\epoc-studio.exe %*
+if exist .\venv\Scripts\presteeg.exe (
+    start "" .\venv\Scripts\presteeg.exe %*
 ) else (
-    start "" .\venv\Scripts\pythonw.exe -m epoc_studio %*
+    start "" .\venv\Scripts\pythonw.exe -m presteeg %*
 )

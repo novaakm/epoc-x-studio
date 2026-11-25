@@ -1,4 +1,4 @@
-"""Live Waveforms viewer (PyQtGraph) usable inside EPOC Studio or standalone."""
+"""Live Waveforms viewer (PyQtGraph) usable inside prestEEG or standalone."""
 from __future__ import annotations
 
 import argparse
@@ -1838,7 +1838,7 @@ def _extract_recording_bounds(st, lines):
 
 
 class LiveViewerWindow(QtWidgets.QWidget):
-    """Independent Live Waveforms window usable inside EPOC Studio or standalone."""
+    """Independent Live Waveforms window usable inside prestEEG or standalone."""
 
     closed = QtCore.pyqtSignal()
     _external_pause_signal = QtCore.pyqtSignal(bool)
@@ -1854,7 +1854,7 @@ class LiveViewerWindow(QtWidgets.QWidget):
         shared_groups=(),
         style: str = "linespoints",
         width_ms: Optional[float] = None,
-        window_title: str = "EPOC-X Live Waveforms",
+        window_title: str = "prestEEG — Live Waveforms",
         notes_path: Optional[str] = None,
         on_close: Optional[Callable[[], None]] = None,
         on_pause_request: Optional[Callable[[Optional[bool]], Optional[bool]]] = None,
@@ -3550,7 +3550,7 @@ def create_viewer_window(
     width_ms=None,
     realtime_replay=False,
     quick_on_header=False,
-    window_title="EPOC-X Live Waveforms",
+    window_title="prestEEG — Live Waveforms",
     notes_path: Optional[str] = None,
     on_close: Optional[Callable[[], None]] = None,
     initial_paused: bool = False,
@@ -3674,7 +3674,7 @@ def run_gui(
     shared_groups,
     style,
     width_ms,
-    window_title="EPOC-X Live Viewer",
+    window_title="prestEEG — Live Viewer",
 ):
     app = ensure_qt_app(sys.argv)
     win = LiveViewerWindow(
@@ -3698,7 +3698,7 @@ def run_gui(
 
 def parse_args(argv):
     ap = argparse.ArgumentParser(
-        prog="epoc-live-viewer",
+        prog="presteeg-live-viewer",
         description="Fast live viewer for CSV values arriving on stdin or broker socket.",
     )
     ap.add_argument(
@@ -3732,14 +3732,14 @@ def parse_args(argv):
     ap.add_argument(
         "--connect",
         metavar="HOST:PORT",
-        help="connect to a local EPOC-X stream broker TCP socket instead of reading stdin",
+        help="connect to a local prestEEG stream broker TCP socket instead of reading stdin",
     )
     ap.add_argument(
         "--notes",
         metavar="NOTES.csv",
         help="timed notes CSV file to overlay and tail live",
     )
-    ap.add_argument("--title", default="EPOC-X Live Viewer", help="window title")
+    ap.add_argument("--title", default="prestEEG — Live Viewer", help="window title")
     return ap.parse_args(argv)
 
 

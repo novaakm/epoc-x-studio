@@ -22,7 +22,7 @@ def create_csv_compare_window(
 ) -> BaseWebWindow:
     """Open ``simple-viewer.html`` inside a native dark-themed desktop window."""
     win = BaseWebWindow(
-        title="EPOC-X CSV Compare",
+        title="prestEEG — CSV Compare",
         bg_hex="#080d18",
         width=1280,
         height=860,
@@ -56,8 +56,8 @@ def create_csv_compare_window(
 
 def main(argv: Optional[list[str]] = None) -> int:
     ap = argparse.ArgumentParser(
-        prog="epoc-csv-compare",
-        description="Compare two EPOC-X CSV recordings side-by-side inside a desktop window.",
+        prog="presteeg-csv-compare",
+        description="Compare two EEG CSV recordings side-by-side inside a desktop window.",
     )
     ap.add_argument("file_a", nargs="?", help="Optional path to File A CSV")
     ap.add_argument("file_b", nargs="?", help="Optional path to File B CSV")

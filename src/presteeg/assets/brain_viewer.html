@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>3D BRAIN VIEWER</title>
+  <title>prestEEG — 3D Brain Map</title>
   <style>
     :root {
       --bg: #030508;
@@ -1373,11 +1373,11 @@
     const fpsCounter = document.getElementById("fpsCounter");
 
     // Where the data comes from: this page's own server (standalone), or -- when the page is served under
-    // /studio/ by the logger's web server -- the LSL backend on STUDIO_PORT of the same host.
+    // /presteeg/ or /studio/ by the logger's web server -- the LSL backend on BACKEND_PORT of the same host.
     // ?device=ID chooses the EEG device (the logger's ids: epocx1, epocx2, muse1).
-    const STUDIO_PORT = 8766;
-    const UNDER_LOGGER = location.pathname.startsWith("/studio/");
-    const API = UNDER_LOGGER ? `${location.protocol}//${location.hostname}:${STUDIO_PORT}` : "";
+    const BACKEND_PORT = 8766;
+    const UNDER_LOGGER = location.pathname.startsWith("/presteeg/") || location.pathname.startsWith("/studio/");
+    const API = UNDER_LOGGER ? `${location.protocol}//${location.hostname}:${BACKEND_PORT}` : "";
     let deviceId = new URLSearchParams(location.search).get("device") || "";
     const devQ = () => (deviceId ? `?device=${encodeURIComponent(deviceId)}` : "");
 

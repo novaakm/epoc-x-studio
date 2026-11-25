@@ -9,22 +9,22 @@ import sys
 from pathlib import Path
 from typing import Callable, Optional
 
-from epoc_direct.paths import get_user_data_dir
+from .paths import get_user_data_dir
 
-APP_ID = "EpocX.Studio.Desktop"
-APP_DISPLAY_NAME = "EPOC-X Studio"
+APP_ID = "prestEEG.Desktop"
+APP_DISPLAY_NAME = "prestEEG"
 
 _ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 _APP_ID_INITIALIZED = False
 
 
 def asset_path(*parts: str) -> Path:
-    """Return the path to a static asset bundled inside ``epoc_studio/assets``."""
+    """Return the path to a static asset bundled inside ``presteeg/assets``."""
     return _ASSETS_DIR.joinpath(*parts)
 
 
 def init_windows_app_id() -> None:
-    """Register an explicit AppUserModelID so Windows groups Studio windows cleanly."""
+    """Register an explicit AppUserModelID so Windows groups prestEEG windows cleanly."""
     global _APP_ID_INITIALIZED
     if _APP_ID_INITIALIZED or sys.platform != "win32":
         return
@@ -40,12 +40,12 @@ def init_windows_app_id() -> None:
 def get_app_icon():
     from PyQt6 import QtGui
 
-    ico = asset_path("epoc_studio.ico")
+    ico = asset_path("presteeg.ico")
     if ico.is_file():
         icon = QtGui.QIcon(str(ico))
         if not icon.isNull():
             return icon
-    png = asset_path("epoc_studio.png")
+    png = asset_path("presteeg.png")
     if png.is_file():
         return QtGui.QIcon(str(png))
     return QtGui.QIcon()
@@ -143,7 +143,7 @@ def set_always_on_top(widget, on: bool) -> None:
 
 
 def open_broker_stream(addr: str):
-    """Connect to a local EPOC-X TCP CSV broker and return ``(socket, text_stream)``."""
+    """Connect to a local prestEEG TCP CSV broker and return ``(socket, text_stream)``."""
     if ":" in addr:
         host, port_s = addr.rsplit(":", 1)
         host = host or "127.0.0.1"
@@ -173,26 +173,26 @@ def install_sigint_handler(widget, on_quit: Callable[[], None]) -> None:
     timer.start(100)
 
 
-def _find_studio_launch_target() -> tuple[str, str]:
-    """Return ``(executable, arguments)`` for launching EPOC-X Studio GUI cleanly."""
+def _find_app_launch_target() -> tuple[str, str]:
+    """Return ``(executable, arguments)`` for launching prestEEG GUI cleanly."""
     py_exe = Path(sys.executable)
     scripts_dir = py_exe.parent
-    studio_exe = scripts_dir / "epoc-studio.exe"
-    if studio_exe.is_file():
-        return str(studio_exe), ""
+    app_exe = scripts_dir / "presteeg.exe"
+    if app_exe.is_file():
+        return str(app_exe), ""
     pythonw = scripts_dir / "pythonw.exe"
     if pythonw.is_file():
-        return str(pythonw), "-m epoc_studio"
-    return str(py_exe), "-m epoc_studio"
+        return str(pythonw), "-m presteeg"
+    return str(py_exe), "-m presteeg"
 
 
 def install_windows_shortcuts(desktop: bool = True) -> dict[str, Path]:
-    """Create Windows Start Menu (and optional Desktop) shortcuts for EPOC-X Studio."""
+    """Create Windows Start Menu (and optional Desktop) shortcuts for prestEEG."""
     if sys.platform != "win32":
         raise RuntimeError("Windows shortcuts are only supported on Windows.")
 
-    target_exe, target_args = _find_studio_launch_target()
-    icon_file = str(asset_path("epoc_studio.ico"))
+    target_exe, target_args = _find_app_launch_target()
+    icon_file = str(asset_path("presteeg.ico"))
     work_dir = str(get_user_data_dir())
     os.makedirs(work_dir, exist_ok=True)
 
@@ -226,7 +226,7 @@ def install_windows_shortcuts(desktop: bool = True) -> dict[str, Path]:
                 f"$s.Arguments = {_ps_quote(target_args)}",
                 f"$s.WorkingDirectory = {_ps_quote(work_dir)}",
                 f"$s.IconLocation = {_ps_quote(icon_file + ',0')}",
-                f"$s.Description = {_ps_quote('EPOC-X Studio - EEG Stream Hub & Visualizations')}",
+                f"$s.Description = {_ps_quote('prestEEG - EEG Stream Hub & Visualizations')}",
                 "$s.Save()",
             ]
         )

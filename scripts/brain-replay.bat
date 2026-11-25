@@ -11,10 +11,10 @@ if "%1"=="" (
 )
 
 echo ========================================================
-echo   EPOC-X 3D Holographic Brain Activity Streamer
+echo   prestEEG 3D Brain Activity Streamer
 echo   MODE: Replaying %IN% in real-time
 echo   Opening native 3D Brain Map desktop window...
 echo   Press Ctrl+C in this terminal to stop.
 echo ========================================================
 
-.\venv\Scripts\epoc-brain-map.exe --replay "%IN%"
+.\venv\Scripts\presteeg-brain-map.exe --replay "%IN%"

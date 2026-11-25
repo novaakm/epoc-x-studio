@@ -1,4 +1,4 @@
-"""CLI entry point for ``epoc-direct-record``."""
+"""CLI entry point for ``presteeg-record``."""
 from __future__ import annotations
 
 import argparse
@@ -12,13 +12,13 @@ from .record import Recorder
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
-        prog="epoc-direct-record",
-        description="Decrypt and stream EPOC-X BLE EEG packets as CSV or LSL.",
+        prog="presteeg-record",
+        description="Stream and record EPOC-X BLE EEG packets as CSV or LSL.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument(
         "--key",
-        help="this device's AES-256 key as 64 hex chars (else $EPOCX_AES_KEY or KEYS.txt)",
+        help="this device's AES-256 key as 64 hex chars (else $PRESTEEG_AES_KEY or KEYS.txt)",
     )
     ap.add_argument(
         "--device",
@@ -56,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
         default="EPOCX",
         help="LSL stream name (default EPOCX); give each headset its own when streaming several",
     )
-    ap.add_argument("--whiten", help="XOR whitening byte, e.g. 0x14 (else $EPOCX_WHITEN or 0x55)")
+    ap.add_argument("--whiten", help="XOR whitening byte, e.g. 0x14 (else $PRESTEEG_WHITEN or 0x55)")
     ap.add_argument(
         "--csv",
         metavar="FILE.csv",
@@ -69,12 +69,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = ap.parse_args(argv)
 
-    if not args.key and not os.environ.get("EPOCX_AES_KEY"):
+    has_env_key = bool(os.environ.get("PRESTEEG_AES_KEY") or os.environ.get("EPOCX_AES_KEY"))
+    has_env_whiten = bool(os.environ.get("PRESTEEG_WHITEN") or os.environ.get("EPOCX_WHITEN"))
+    if not args.key and not has_env_key:
         selector = args.device or args.address or args.name
         profile = devices.resolve_device(selector)
         if profile is not None:
             args.key = profile.aes_key
-            if not args.whiten and not os.environ.get("EPOCX_WHITEN"):
+            if not args.whiten and not has_env_whiten:
                 decrypt.WHITEN_XOR = profile.whiten
             if not args.address and profile.effective_address:
                 args.address = profile.effective_address

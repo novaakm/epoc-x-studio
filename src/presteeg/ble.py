@@ -1,17 +1,8 @@
-"""Low-level BLE connection management for the EPOC-X.
+"""Low-level BLE connection management for Emotiv EPOC-X headsets.
 
-Adapted from mudrarecord's ``ble.py`` (same D-Bus fixup, discovery pattern, and
-early-timestamp notification dispatch), but generalized: unlike the Mudra Band,
-EPOC-X's GATT service/characteristic UUIDs are not publicly documented, so this
-module does not hardcode any characteristic. It exposes generic service
-enumeration (``list_services``) and "subscribe to everything" (``start_notify_all``)
-so the ``sniff`` CLI command can discover the right characteristic live against
-real hardware.
-
-The key feature carried over unchanged: a global wall-clock nanosecond
-timestamp (``time.time_ns()``) is captured inside the notification dispatcher,
-as early as possible after a packet arrives, and handed to the registered
-handler together with the payload.
+Captures a wall-clock nanosecond timestamp (``time.time_ns()``) inside the
+notification dispatcher as early as possible after a packet arrives and passes
+it to the registered handler together with the payload.
 """
 from __future__ import annotations
 
@@ -25,7 +16,7 @@ from typing import Callable, Optional
 from bleak import BleakClient, BleakScanner
 from bleak.backends.device import BLEDevice
 
-logger = logging.getLogger("epocxrecord.ble")
+logger = logging.getLogger("presteeg.ble")
 
 # (uuid, timestamp_ns, data)
 NotifyHandler = Callable[[str, int, bytearray], None]
@@ -184,12 +175,7 @@ class BleConnection:
     # --- Service discovery ---
 
     def list_services(self) -> list[CharacteristicInfo]:
-        """Enumerate every GATT service/characteristic on the connected device.
-
-        Unlike mudrarecord (which targets a device with known, fixed
-        characteristic UUIDs), epocxrecord has no such table, so this is the
-        primary way to explore an EPOC-X device's GATT layout.
-        """
+        """Enumerate every GATT service/characteristic on the connected device."""
         assert self._client is not None
         chars: list[CharacteristicInfo] = []
         for service in self._client.services:

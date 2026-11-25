@@ -1,6 +1,6 @@
 Set-Location $PSScriptRoot
-if (Test-Path .\venv\Scripts\epoc-studio.exe) {
-    & .\venv\Scripts\epoc-studio.exe @args
+if (Test-Path .\venv\Scripts\presteeg.exe) {
+    & .\venv\Scripts\presteeg.exe @args
 } else {
-    & .\venv\Scripts\pythonw.exe -m epoc_studio @args
+    & .\venv\Scripts\pythonw.exe -m presteeg @args
 }

@@ -1,18 +1,16 @@
-# EPOC-X Studio — User Manual
+# prestEEG — User Manual
 
-**EPOC-X Studio** streams, records, replays, and analyzes 14-channel EEG (`AF3`–`AF4`) and 7-channel motion (`MOT0`–`MOT6`) data from an **Emotiv EPOC-X** headset directly over Bluetooth Low Energy (BLE) — with no Emotiv Cortex service, license, or cloud account required at runtime.
-
-It is an interoperability toolkit for reading a wearer's own EEG from hardware they own, analogous to [`emokit`](https://github.com/openyou/emokit) for earlier EPOC headsets.
+**prestEEG** streams, records, replays, and analyzes real-time EEG and motion data from **Emotiv EPOC-X** headsets (14 EEG channels `AF3`–`AF4` + 7 motion channels `MOT0`–`MOT6` over Bluetooth Low Energy or LSL) as well as **Muse** headbands (4 EEG channels `TP9`, `AF7`, `AF8`, `TP10` over Lab Streaming Layer) — with no external runtime service or cloud account required.
 
 ---
 
 ## 1. What the App Does
 
-- **Direct BLE Acquisition**: Connects to the headset over BLE, decrypts raw packets in real time, and decodes 14 EEG channels (`~128 Hz`) plus 7 motion channels (`~32 Hz`).
+- **Live BLE & LSL Streaming**: Connects to configured headsets over BLE or consumes Lab Streaming Layer (LSL) streams in real time.
 - **Unified Desktop Hub**: Streams live headset data or replays recorded CSV files to multiple visualization windows simultaneously over a built-in local stream broker.
 - **Live & Offline Visualization**: Inspect electrode contact quality, raw waveforms, 3D cortical frequency bands, and side-by-side recording comparisons.
+- **Multi-Device Web Brain Map**: Serve live 3D Brain Maps and headmaps in a browser for several EPOC-X and Muse devices simultaneously on a local network without Qt.
 - **Recording & Timed Notes**: Save sessions to CSV at any point during a stream and log timestamped text annotations that appear directly on the waveform timeline.
-- **Lab Streaming Layer (LSL)**: Optionally publish live streams to LSL or record LSL streams to disk.
 
 ---
 
@@ -20,12 +18,13 @@ It is an interoperability toolkit for reading a wearer's own EEG from hardware t
 
 | Component | Command | Role |
 |---|---|---|
-| **EPOC-X Studio** | `epoc-studio` | Main desktop control hub, device profile manager, recorder, and local TCP stream broker (`127.0.0.1:18765`). |
-| **Headmap** | `epoc-headmap` | Live 2D vector head diagram showing per-electrode contact quality, signal quality, and Yaw/Pitch/Roll head orientation. |
-| **Live Waveforms** | `epoc-live-viewer` | High-speed PyQtGraph oscilloscope for stacked EEG and motion traces, synchronized replay scrubbing, and event note overlays. |
-| **3D Brain Map** | `epoc-brain-map` | 3D WebGL cortical viewer displaying real-time FFT frequency bands across 8 bilateral cortical regions (with spatially interpolated dorsal crown), rolling band-power graphs, and cognitive indices. |
-| **CSV Compare** | `epoc-csv-compare` | Side-by-side offline recording viewer with millisecond time-shift alignment, measurement cursors, and live Pearson *r* correlation. |
-| **CLI Utilities** | `epoc-direct-record`, `epoc-take-notes`, `epoc-probe-device`, `epoc-from-lsl`, `epoc-save-lsl` | Standalone command-line tools for headless recording, terminal note logging, Linux key extraction, and LSL bridging. |
+| **prestEEG** | `presteeg` | Main desktop control hub, device profile manager, recorder, and local TCP stream broker (`127.0.0.1:18765`). |
+| **Headmap** | `presteeg-headmap` | Live 2D vector head diagram showing per-electrode contact quality, signal quality, and Yaw/Pitch/Roll head orientation (EPOC-X & Muse layouts). |
+| **Live Waveforms** | `presteeg-live-viewer` | High-speed PyQtGraph oscilloscope for stacked EEG and motion traces, synchronized replay scrubbing, and event note overlays. |
+| **3D Brain Map** | `presteeg-brain-map` | 3D WebGL cortical viewer displaying real-time FFT frequency bands across 8 bilateral cortical regions (with spatially interpolated dorsal crown), rolling band-power graphs, and cognitive indices. |
+| **LSL Web Server** | `presteeg-lsl-brain-server` | Headless multi-device HTTP/SSE server streaming the 3D Brain Map and live headmaps to browsers from LSL streams. |
+| **CSV Compare** | `presteeg-csv-compare` | Side-by-side offline recording viewer with millisecond time-shift alignment, measurement cursors, and live Pearson *r* correlation. |
+| **CLI Utilities** | `presteeg-record`, `presteeg-take-notes`, `presteeg-from-lsl`, `presteeg-save-lsl` | Standalone command-line tools for headless recording, terminal note logging, and LSL bridging. |
 
 ---
 
@@ -39,7 +38,7 @@ Double-click `install.bat` in the repository root (it creates `venv` if needed a
 python -m venv venv
 .\install.ps1
 ```
-`install.bat` / `install.ps1` install the package in editable mode (`pip install -e .`) and create Desktop and Start Menu shortcuts for **EPOC-X Studio**. You can also launch it via `launcher.bat`, `launcher.ps1`, or `.\venv\Scripts\epoc-studio.exe`.
+`install.bat` / `install.ps1` install the package in editable mode (`pip install -e .`) and create Desktop and Start Menu shortcuts for **prestEEG**. You can also launch it via `launcher.bat`, `launcher.ps1`, or `.\venv\Scripts\presteeg.exe`.
 
 **Linux / macOS (or manual install)**
 ```bash
@@ -49,37 +48,25 @@ python3 -m venv venv
 ./venv/bin/pip install -e ".[lsl]"
 ```
 
-### Configure Device Keys (`KEYS.txt`)
+### Configure Device Profiles (`KEYS.txt`)
 
 > [!IMPORTANT]
-> Every EPOC-X headset has its own **AES-256 key** and **1-byte XOR whitening constant (`W`)**. No keys are shipped in this repository.
+> For direct BLE streaming, each EPOC-X headset requires its own per-device **AES-256 key** and **1-byte whitening constant (`W`)**. No keys are shipped in this repository.
 
-1. **Add or edit your key in the GUI**: Open **EPOC-X Studio** → click **Devices...** → enter your headset's:
+1. Open **prestEEG** → click **Devices...** → enter your headset's:
    - **BT Name** (e.g. `EPOC-X`) and **BT Address** (or leave `(auto)` to auto-discover)
    - **AES-256 Key** (32 or 64 hex characters)
    - **Whitening Byte** (e.g. `0x14`, or `0x55` on older firmware)
-   - Click **Save / Update**. Profiles are saved locally in git-ignored `KEYS.txt`.
-2. **Extracting keys from your own headset (Linux)**:
-   Run `epoc-probe-device` for an interactive walkthrough, or extract them manually (full write-up in [`docs/FINDINGS.md`](docs/FINDINGS.md)):
-   ```bash
-   # 1) Dump AES key from a running Linux CortexService (needs sudo)
-   sudo gdb -q -batch -p "$(systemctl show -p MainPID --value cortex)" \
-       -x tools/dump_swaes.gdb 2>&1 | tee key.log
-
-   # 2) Auto-solve the whitening byte W from a 5-second raw BLE capture
-   sudo systemctl stop cortex cortexsync
-   python3 tools/capture_raw.py 5 capture.csv
-   python3 tools/find_whiten.py capture.csv <YOUR_KEY_HEX>
-   ```
+2. Click **Save / Update**. Profiles are stored locally in git-ignored `KEYS.txt` (never committed to version control).
 
 ---
 
-## 4. How to Use EPOC-X Studio
+## 4. How to Use prestEEG
 
 ### A. Stream a Live Headset or Replay a CSV
 1. **Live Headset**: In the **Stream Source** card, select **Live Headset**, pick your saved profile (and check **LSL** if needed), then click **Connect Stream**.
 2. **Replay CSV**: Switch to **Replay CSV**, click **Browse...** to pick a recorded `.csv` file (defaults to `recordings/eeg_recording.csv`), choose playback speed (`0.5x`, `1x`, `2x`, `4x`) and **Loop**, then click **Start Replay**.
-   - During replay, drag or click the **progress bar** to seek — Studio, Live Waveforms, and the 3D Brain Map stay synchronized.
+   - During replay, drag or click the **progress bar** to seek — prestEEG, Live Waveforms, and the 3D Brain Map stay synchronized.
 3. Click **Pause Stream** / **Resume Stream** at any time to freeze or resume all connected views.
 
 ### B. Record CSVs & Timed Event Notes
@@ -90,26 +77,19 @@ python3 -m venv venv
 
 ### B2. Brain Map in a Browser for LSL Streams (no Qt, many viewers)
 
-`epoc-lsl-brain-server` serves the 3D Brain Map as a web page for several devices at once, following their
-Lab Streaming Layer streams (`epoc-direct-record --lsl --lsl-name NAME`, or `muse-record --lsl`). It needs only
-`numpy` and `pylsl` (`pip install -e ".[lsl]"`), not PyQt, so it can run headless on a recording machine:
+`presteeg-lsl-brain-server` serves the 3D Brain Map as a web page for several devices at once, following their Lab Streaming Layer streams (`presteeg-record --lsl --lsl-name NAME`, or `muse-record --lsl`). It needs only `numpy` and `pylsl` (`pip install -e ".[lsl]"`), not PyQt, so it can run headless on a recording machine:
 
 ```bash
-epoc-lsl-brain-server --host 0.0.0.0 --port 8766 \
+presteeg-lsl-brain-server --host 0.0.0.0 --port 8766 \
     epocx1='EPOCX (E1234567)' epocx2='EPOCX (E7654321)' muse1=Muse
 ```
 
-Open `http://HOST:8766/?device=muse1`; the device menu at the top switches between the streams. Each device gets
-its own DSP, so viewers of different devices do not disturb each other. Streams that are not up yet are waited for.
+Open `http://HOST:8766/?device=muse1`; the device menu at the top switches between the streams. Each device gets its own DSP, so viewers of different devices do not disturb each other. Streams that are not up yet are waited for.
 
-- **Muse (4 electrodes: TP9, AF7, AF8, TP10)**: AF7/AF8 stand for both frontal regions of their side, TP9/TP10 for the
-  temporal ones; the occipital regions have no electrode and are drawn dark ("no electrode"); the parietal crown is
-  interpolated from the remaining regions (`MUSE_REGION_MAPPING` in `brain_map_view.py`).
-- `--headmap-dir DIR`: show the live head map of the device (the image `status-image-<device>.png`, as written by an
-  external head map feeder) in the right panel; `--logger-port PORT`: add a "Logger" link to a web app on this host.
+- **Muse (4 electrodes: TP9, AF7, AF8, TP10)**: AF7/AF8 stand for both frontal regions of their side, TP9/TP10 for the temporal ones; the occipital regions have no electrode and are drawn dark ("no electrode"); the parietal crown is interpolated from the remaining regions (`MUSE_REGION_MAPPING` in `brain_map_view.py`).
+- `--headmap-dir DIR`: show the live head map of the device (the image `status-image-<device>.png`, as written by an external head map feeder) in the right panel; `--logger-port PORT`: add a "Logger" link to a web app on this host.
 - `--exit-with PID`: stop together with the process that started the server.
-- The page can also be served by another web server under `/studio/` (relative assets); it then talks to this
-  backend on port 8766 (CORS is enabled).
+- The page can also be served by another web server under `/presteeg/` (or `/studio/`) using relative assets; it then talks to this backend on port 8766 (CORS is enabled).
 
 ### C. Using the Visualization Windows
 
@@ -140,28 +120,22 @@ Click **Launch All Live Views** to open Headmap, Live Waveforms, and 3D Brain Ma
 
 ## 5. How the Analyses Are Performed
 
-### A. Packet Decryption & Channel Decoding
-Each BLE notification on the EEG GATT characteristic (`81072f41-9f3d-11e3-a9dc-0002a5d5c51b`) is decrypted block-by-block (`16` bytes per block):
-
-```text
-plaintext = AES256_ECB_decrypt(KEY, ciphertext XOR W)
-```
-
-- **EEG Frames**: Every 64-byte packet contains two 32-byte EEG frames (`~128 Hz` sample rate). Each frame carries a 1-byte counter and 14 unsigned 16-bit ADC counts (`~0x8000` midpoint at rest) ordered left-to-right:
+### A. Packet Decoding & Channel Layout
+- **EEG Frames**: Every 64-byte BLE packet contains two 32-byte EEG frames (`~128 Hz` sample rate). Each frame carries a 1-byte counter and 14 unsigned 16-bit ADC counts (`~0x8000` midpoint at rest) ordered left-to-right:
   `AF3, F7, F3, FC5, T7, P7, O1 | O2, P8, T8, FC6, F4, F8, AF4`.
-- **Motion & Status**: 84-byte packets append one 16-byte block of 7 big-endian `int16` motion channels (`MOT0`–`MOT6`, `~32 Hz`) plus a 4-byte cleartext status/quality trailer (`status_a, quality_a, status_b, quality_b`).
+- **Motion & Status**: 84-byte packets append one 16-byte block of 7 big-endian `int16` motion channels (`MOT0`–`MOT6`, `~32 Hz`) plus a 4-byte status/quality trailer (`status_a, quality_a, status_b, quality_b`).
 
 ### B. 3D Brain Map: Band Discrimination, Cortical Mapping & Graphs
-The 3D Brain Map (`BrainDSP` in `src/epoc_studio/brain_map_view.py`) analyzes a sliding **1.0-second window** (`128` samples) updated **20 times per second**:
+The 3D Brain Map (`BrainDSP` in `src/presteeg/brain_map_view.py`) analyzes a sliding **1.0-second window** (`128` samples on EPOC-X, `256` samples on Muse) updated **20 times per second**:
 
 1. **Signal Conditioning & Artifact Detection**
-   - **Artifact Check**: If any channel's standard deviation across the 1-second window exceeds `2500` ADC counts, the frame is flagged as `EMG ARTIFACT CLAMPED`.
-   - **Detrending & Common Median Reference (CMR)**: Each channel is linearly detrended (removing DC offset and slow drift), then the median across all 14 channels at each time step is subtracted to reject global common-mode noise.
+   - **Artifact Check**: If any channel's standard deviation across the 1-second window exceeds the configured threshold (`2500` ADC counts on EPOC-X, `1300 µV` on Muse), the frame is flagged as `EMG ARTIFACT CLAMPED`.
+   - **Detrending & Common Median Reference (CMR)**: Each channel is linearly detrended (removing DC offset and slow drift), and on multi-channel EPOC-X layouts the median across all 14 channels at each time step is subtracted to reject global common-mode noise.
    - **Pre-Emphasis & FFT**: A first-order difference (`np.diff`) and Hanning window are applied before computing the real FFT power spectral density (PSD).
    - **1/f Spectral Equalization**: Raw EEG naturally follows a `1/f` power drop-off where slow Delta waves overpower faster bands. By default, `BrainDSP` shapes the spectrum with a high-frequency shelf above `15 Hz` and normalizes each band by its frequency width (with Delta's lower bound raised to `1.5 Hz` to reject eye-blink/sway drift) so all five bands compete on an even footing.
 
 2. **Frequency Bands & Cortical Region Mapping**
-   Power is integrated across five standard EEG bands and averaged into **8 bilateral cortical regions** (while the dorsal central/parietal crown, which has no EPOC-X electrodes over `C3/Cz/C4` or `P3/Pz/P4`, is smoothly interpolated per-vertex from the 4 surrounding regions on each hemisphere):
+   Power is integrated across five standard EEG bands and averaged into **8 bilateral cortical regions** (while the dorsal central/parietal crown, which has no electrodes over `C3/Cz/C4` or `P3/Pz/P4`, is smoothly interpolated per-vertex from surrounding regions on each hemisphere):
 
    | Band | Frequency Range | Color | Typical Correlate |
    |---|---|---|---|
@@ -171,13 +145,13 @@ The 3D Brain Map (`BrainDSP` in `src/epoc_studio/brain_map_view.py`) analyzes a 
    | **Beta** | `12–30 Hz` | Green (`#22c55e`) | Active thinking, alertness, motor/task focus |
    | **Gamma** | `30–45 Hz` | Pink (`#ec4899`) | High-frequency cognitive processing |
 
-   | Cortical Region (Left / Right) | Mapped Electrodes | Anatomical Gyri Covered |
-   |---|---|---|
-   | **Dorsal Frontal L / R** | `AF3, F3` / `AF4, F4` | Superior & middle frontal gyri |
-   | **Ventral Frontal L / R** | `F7, FC5` / `F8, FC6` | Inferior frontal gyrus (orbitalis, triangularis, opercularis) |
-   | **Temporal L / R** | `T7, P7` / `T8, P8` | Superior/middle/inferior temporal + posterior temporo-parietal (`T5/T6`) |
-   | **Occipital L / R** | `O1` / `O2` | Occipital poles |
-   | *(Interpolated)* **Parietal L / R** | `--` *(Adjacent regions)* | Precentral, postcentral, supramarginal & superior parietal gyri |
+   | Cortical Region (Left / Right) | EPOC-X Electrodes | Muse Electrodes | Anatomical Gyri Covered |
+   |---|---|---|---|
+   | **Dorsal Frontal L / R** | `AF3, F3` / `AF4, F4` | `AF7` / `AF8` | Superior & middle frontal gyri |
+   | **Ventral Frontal L / R** | `F7, FC5` / `F8, FC6` | `AF7` / `AF8` | Inferior frontal gyrus (orbitalis, triangularis, opercularis) |
+   | **Temporal L / R** | `T7, P7` / `T8, P8` | `TP9` / `TP10` | Superior/middle/inferior temporal + posterior temporo-parietal (`T5/T6`) |
+   | **Occipital L / R** | `O1` / `O2` | `--` *(no electrode)* | Occipital poles |
+   | *(Interpolated)* **Parietal L / R** | `--` *(Adjacent regions)* | `--` *(Adjacent regions)* | Precentral, postcentral, supramarginal & superior parietal gyri |
 
 3. **Band Discrimination, Baseline Calibration & Lobe Glow**
    - **Relative Share**: In each lobe, a band's power is divided by the sum of all five bands in that lobe (`0%–100%`), then smoothed over time with an Exponential Moving Average (`α = 0.25`).
@@ -186,17 +160,17 @@ The 3D Brain Map (`BrainDSP` in `src/epoc_studio/brain_map_view.py`) analyzes a 
 
 4. **Band Graphs & Live Cognitive Indices**
    - **Expandable Band Graphs**: Each band pill expands into a rolling `~6-second` (`120`-frame) SVG chart of global average band share (auto-scaled between `50%` and `100%`). In **All Bands**, all enabled bands are plotted together with the globally dominant band highlighted by a thicker line and shaded fill.
-   - **Alpha Relaxation**: Mean relative Alpha share across the posterior lobes (`O1, O2, P7, P8`).
+   - **Alpha Relaxation**: Mean relative Alpha share across active posterior lobes.
    - **Engagement Index**: Ratio of global `Beta / (Alpha + Theta)` (clipped to `0.00–3.00`), reflecting active alertness relative to slower rhythms.
 
 ### C. Headmap: Contact Quality, Signal Quality & Orientation
-- **Contact Ring (`1.5 s` window)**: Evaluates whether each electrode is flat/railed, measures its correlation (`≥ 0.40`) against the common-mode signal across all channels, and checks signal mobility (`std(diff) / std ≤ 0.79`) with EMA smoothing and an on-head consensus vote (capped by hardware quality values when present).
+- **Contact Ring (`1.5 s` window)**: Evaluates whether each electrode is flat/railed, measures its correlation (`≥ 0.40`) against the common-mode signal across channels, and checks signal mobility (`std(diff) / std ≤ 0.79`) with EMA smoothing and an on-head consensus vote (capped by hardware quality values when present).
 - **Signal Quality Dot (`2.0 s` window)**: Linearly detrends the signal and combines three factors into a `0–1` score: healthy amplitude (`2–60 µV` SD), absence of large spike artifacts (`> 6× SD`), and a high ratio of `1–30 Hz` EEG power vs. `48–52 Hz` mains line noise.
-- **Head Orientation**: Computes Roll and Pitch from the accelerometer channels (`MOT0`–`MOT2`) and tilt-compensated Yaw from the magnetometer channels (`MOT3`–`MOT5`).
+- **Head Orientation**: Computes Roll and Pitch from accelerometer channels and tilt-compensated Yaw from magnetometer channels when available.
 
 ### D. Live Waveforms: Normalization & Event Overlay
 - **Per-Channel Scaling**: By default, each trace is independently min/max normalized (`[0, 1]`) over the currently visible time window so small EEG fluctuations and larger baseline offsets remain readable side-by-side without clipping. Passing `--shared-range-groups` switches selected plot groups to a shared physical Y-axis.
-- **Timed Notes**: Notes from Studio or `<recording>.notes.csv` are rendered as vertical dashed lines (for instant markers) or shaded time spans (when duration `≥ 100 ms`).
+- **Timed Notes**: Notes from prestEEG or `<recording>.notes.csv` are rendered as vertical dashed lines (for instant markers) or shaded time spans (when duration `≥ 100 ms`).
 
 ### E. CSV Compare: Envelope Decimation & Correlation
 - **Min/Max + Mean Decimation**: To keep long recordings responsive at any zoom level, samples inside the visible window are bucketed into one time bin per screen pixel. Each pixel column draws both a translucent **min-to-max vertical envelope** (so brief spikes never disappear when zoomed out) and a solid **mean trace**.
@@ -211,29 +185,32 @@ All tools can be run standalone from `venv/Scripts` (Windows) or `venv/bin` (Lin
 
 ```bash
 # Launch the full desktop hub
-epoc-studio
+presteeg
 
-# Stream decrypted EEG + motion to stdout and save to disk
-epoc-direct-record --device EPOC-X --csv recordings/session.csv
+# Stream EEG + motion to stdout and save to disk
+presteeg-record --device EPOC-X --csv recordings/session.csv
 
-# Pipe a live stream or connect a viewer to a running Studio broker
-epoc-direct-record | epoc-live-viewer --width=5s --group=5-18 --group=19-25
-epoc-headmap --connect 127.0.0.1:18765
-epoc-brain-map --replay recordings/eeg_recording.csv
+# Pipe a live stream or connect a viewer to a running prestEEG broker
+presteeg-record | presteeg-live-viewer --width=5s --group=5-18 --group=19-25
+presteeg-headmap --connect 127.0.0.1:18765
+presteeg-brain-map --replay recordings/eeg_recording.csv
+
+# Serve live 3D Brain Maps in a browser for LSL streams
+presteeg-lsl-brain-server --host 0.0.0.0 --port 8766 epocx1='EPOCX (E1234567)' muse1=Muse
 
 # Compare two CSV recordings side-by-side
-epoc-csv-compare recordings/file_a.csv recordings/file_b.csv
+presteeg-csv-compare recordings/file_a.csv recordings/file_b.csv
 
 # Log timed terminal notes alongside a recording
-epoc-take-notes recordings/session.csv
+presteeg-take-notes recordings/session.csv
 ```
 
-Key `epoc-direct-record` options:
+Key `presteeg-record` options:
 - `--device NAME` / `--address ADDR` / `--name BT_NAME`: Select headset profile from `KEYS.txt` or target a specific BLE device.
-- `--key HEX` / `--whiten BYTE`: Supply AES key (`$EPOCX_AES_KEY`) or whitening byte (`$EPOCX_WHITEN`) directly.
+- `--key HEX` / `--whiten BYTE`: Supply AES key (`$PRESTEEG_AES_KEY`) or whitening byte (`$PRESTEEG_WHITEN`) directly.
 - `--csv FILE`: Save CSV to disk while also streaming to `stdout`.
-- `--lsl` / `--lsl-name NAME`: Publish to Lab Streaming Layer instead of CSV (use `epoc-from-lsl` or `epoc-save-lsl` to consume/record LSL streams).
-- `--offline CAPTURE.csv`: Decrypt a raw-packet BLE sniff CSV offline.
+- `--lsl` / `--lsl-name NAME`: Publish to Lab Streaming Layer instead of CSV (use `presteeg-from-lsl` or `presteeg-save-lsl` to consume/record LSL streams).
+- `--offline CAPTURE.csv`: Decode a raw-packet CSV offline.
 
 ### CSV & Notes File Formats
 - **Recording CSV (`.csv`)**:
@@ -246,17 +223,15 @@ Key `epoc-direct-record` options:
 ## 7. Repository Structure
 
 ```text
-epoc-x/
+prestEEG/
 ├── src/
-│   ├── epoc_direct/     # BLE acquisition, AES-256 decryption, CLI tools, TCP stream broker
-│   └── epoc_studio/     # PyQt6 desktop hub, Headmap, Live Waveforms, 3D Brain Map, CSV Compare
-├── scripts/             # Optional standalone Windows .bat / .ps1 pipeline helpers
-├── tools/               # Linux gdb scripts & offline key/whitening recovery utilities
-├── docs/                # Reverse-engineering write-up (FINDINGS.md)
+│   ├── presteeg/        # Core EEG acquisition, stream broker, PyQt6 hub, LSL web server & viewers
+│   └── epoc_studio/     # Lightweight compatibility shims for external LSL integrations
+├── scripts/             # Standalone Windows .bat / .ps1 pipeline helpers
 ├── recordings/          # Bundled demo recording (eeg_recording.csv); new captures git-ignored
 ├── KEYS.txt             # Local per-device AES keys & whitening bytes (git-ignored)
 ├── install.bat / .ps1   # Editable venv install + Windows shortcut creator
-├── launcher.bat / .ps1  # Quick launch wrappers for EPOC-X Studio
+├── launcher.bat / .ps1  # Quick launch wrappers for prestEEG
 └── pyproject.toml
 ```
 
@@ -264,5 +239,4 @@ epoc-x/
 
 ## 8. Authors & Acknowledgments
 
-- Built on initial BLE acquisition, reverse-engineering, and visualization scripts by **Ondřej Bojar**.
-- Extended into **EPOC-X Studio** by **Michal Novák** with assistance from **Google Gemini**.
+- **prestEEG** by **Michal Novák** and **Ondřej Bojar**.

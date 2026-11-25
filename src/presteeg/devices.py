@@ -1,8 +1,7 @@
 """Device configuration store backed by KEYS.txt.
 
-Reads and writes the human-readable stanza format produced by
-``epoc-probe-device`` so keys and whitening bytes live in one git-ignored
-local file rather than being hardcoded in launcher scripts.
+Reads and writes human-readable headset profile stanzas so per-device keys and
+whitening bytes live in one git-ignored local file rather than launcher scripts.
 """
 from __future__ import annotations
 
@@ -100,7 +99,7 @@ def save_devices(devices: list[DeviceProfile], path: str = DEFAULT_KEYS_PATH) ->
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     lines = [
         "# Local EPOC-X device keys (git-ignored — never commit to version control).",
-        "# Managed automatically by epoc_direct/devices.py, epoc-studio, and epoc-probe-device.",
+        "# Managed automatically by prestEEG (presteeg / presteeg.devices).",
         "",
     ]
     for d in devices:

@@ -1,14 +1,12 @@
-"""Record the EPOC-X EEG stream by decrypting the raw BLE packets directly.
+"""Stream and record EPOC-X EEG + motion packets over BLE as CSV or LSL.
 
-Live mode talks BLE to the headset (reusing the ``ble`` layer that already
-captured real data for the sibling ``failed/epocxrecord`` project), decrypts
-each notification with ``decrypt.decrypt_payload``, and streams CSV to stdout.
-Offline mode replays a raw-packet sniff CSV through the same decrypt path --
-useful to validate a freshly-captured key without the headset.
+Live mode connects to the headset via ``ble``, decodes incoming notifications,
+and streams CSV rows to stdout (and/or a file or Lab Streaming Layer outlet).
+Offline mode replays a raw-packet CSV capture through the same decoder.
 
-Pause/resume (the device needs charging, etc.): send SIGUSR1 to toggle pause.
-While paused, live notifications are dropped (not buffered) and BLE stays
-connected; on an actual BLE drop the recorder waits and reconnects on its own.
+Pause/resume: send SIGUSR1 on POSIX systems to toggle pause. While paused, live
+notifications are dropped and BLE stays connected; on a BLE disconnect the
+recorder waits and reconnects automatically.
 """
 from __future__ import annotations
 
@@ -22,15 +20,14 @@ from typing import Optional
 
 from . import channels, decrypt
 
-# Proprietary EPOC-X GATT UUIDs (same service seen in CortexService strings and
-# confirmed live by the sibling project's `sniff`).
+# EPOC-X GATT notification characteristics for EEG and status frames.
 EEG_CHAR_UUID = "81072f41-9f3d-11e3-a9dc-0002a5d5c51b"
 STATUS_TRIGGER_CHAR_UUID = "81072f42-9f3d-11e3-a9dc-0002a5d5c51b"
 
 # --- Lab Streaming Layer (optional, --lsl) ---------------------------------
 # One LSL stream carries one sample per 14-channel EEG frame. Its channels are
 # every CSV column except the two timestamp columns (the sample's LSL timestamp
-# holds the capture time), so ``epoc-from-lsl`` can rebuild the exact live-viewer
+# holds the capture time), so ``presteeg-from-lsl`` can rebuild the exact viewer
 # CSV. Blank cells (motion/status on frames that don't carry them) are sent as
 # NaN. Nominal rate is the per-frame row rate (~128 Hz); it's informational.
 LSL_STREAM_NAME = "EPOCX"
@@ -150,7 +147,7 @@ class Recorder:
         )
         mot = channels.decode_motion_tuple(plain)
         mot_vals = [float(v) for v in mot[1]] if mot else _BLANK_MOT_LSL
-        ts = ts_ns / 1e9  # unix seconds; epoc-from-lsl recovers ts_ns = ts * 1e9
+        ts = ts_ns / 1e9  # unix seconds; presteeg-from-lsl recovers ts_ns = ts * 1e9
         pkt_len_f = float(len(raw))
         for i, (counter, chan_vals) in enumerate(frames):
             sample = [pkt_len_f, float(counter)]

@@ -1,4 +1,4 @@
-"""EPOC-X Studio — Unified Desktop Launcher & Stream Hub.
+"""prestEEG — Unified Desktop Launcher & Stream Hub.
 
 Coordinates a single BLE headset connection (or CSV replay), shares the live
 CSV stream both in-process and over a local TCP broker so Headmap, Live
@@ -20,9 +20,9 @@ from typing import Optional
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-from epoc_direct import devices as dev_store
-from epoc_direct.broker import StreamController, _extract_csv_duration_ms
-from epoc_direct.paths import get_keys_path, get_recordings_dir
+from . import devices as dev_store
+from .broker import StreamController, _extract_csv_duration_ms
+from .paths import get_keys_path, get_recordings_dir
 
 from .brain_map_view import BrainDSP, create_brain_map_window, parse_csv_lines_for_dsp
 from .csv_compare_view import create_csv_compare_window
@@ -363,7 +363,7 @@ class DeviceManagerDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self.setObjectName("DeviceManagerDialog")
         self.setStyleSheet(APP_QSS + DEVICE_MANAGER_QSS)
-        self.setWindowTitle("Manage EPOC-X Devices (KEYS.txt)")
+        self.setWindowTitle("prestEEG — Manage Devices (KEYS.txt)")
         icon = get_app_icon()
         if not icon.isNull():
             self.setWindowIcon(icon)
@@ -796,7 +796,7 @@ class LauncherWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.setStyleSheet(APP_QSS)
-        self.setWindowTitle("EPOC-X Studio")
+        self.setWindowTitle("prestEEG")
         icon = get_app_icon()
         if not icon.isNull():
             self.setWindowIcon(icon)
@@ -1094,7 +1094,7 @@ class LauncherWindow(QtWidgets.QMainWindow):
         self.studio_replay_slider = ReplayProgressBar()
         self.studio_replay_slider.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         self.studio_replay_slider.setEnabled(False)
-        self.studio_replay_slider.setToolTip("Click or drag to seek across Studio, Waveforms, and 3D Brain Map")
+        self.studio_replay_slider.setToolTip("Click or drag to seek across prestEEG, Waveforms, and 3D Brain Map")
         self.studio_replay_slider.seekPressed.connect(self._on_studio_scrub_pressed)
         self.studio_replay_slider.seekMoved.connect(self._on_studio_scrub_moved)
         self.studio_replay_slider.seekReleased.connect(self._on_studio_scrub_released)
@@ -1763,7 +1763,7 @@ class LauncherWindow(QtWidgets.QMainWindow):
                     style="linespoints",
                     width_ms=parse_duration(width),
                     quick_on_header=True,
-                    window_title="EPOC-X Live Waveforms",
+                    window_title="prestEEG — Live Waveforms",
                     on_close=lambda k=key, st=stream: self._cleanup_stream(k, st),
                     initial_paused=self.controller.paused,
                     initial_active=(self.controller.mode != "idle"),
@@ -1956,13 +1956,13 @@ class LauncherWindow(QtWidgets.QMainWindow):
 
 def _parse_args(argv: Optional[list[str]] = None):
     ap = argparse.ArgumentParser(
-        prog="epoc-studio",
-        description="EPOC-X Studio — Unified EEG Stream Hub and Visualization Windows.",
+        prog="presteeg",
+        description="prestEEG — Unified EEG Stream Hub and Visualization Windows.",
     )
     ap.add_argument(
         "--install-shortcut",
         action="store_true",
-        help="Install Windows Start Menu and Desktop shortcuts for EPOC-X Studio and exit",
+        help="Install Windows Start Menu and Desktop shortcuts for prestEEG and exit",
     )
     ap.add_argument(
         "--no-desktop",

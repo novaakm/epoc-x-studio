@@ -13,13 +13,13 @@ if (-not (Test-Path $py)) {
     }
 }
 
-Write-Host "Installing EPOC-X Studio into current Python environment..." -ForegroundColor Cyan
+Write-Host "Installing prestEEG into current Python environment..." -ForegroundColor Cyan
 & $py -m pip install -e .
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-$shortcutArgs = @("-m", "epoc_studio", "--install-shortcut")
+$shortcutArgs = @("-m", "presteeg", "--install-shortcut")
 if ($NoDesktopShortcut) {
     $shortcutArgs += "--no-desktop"
 }
