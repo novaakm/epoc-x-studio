@@ -506,18 +506,57 @@
       contain: layout style paint;
       transform: translate(-50%, -120%);
     }
+
+    /* Device bar (LSL web server): logger link, device choice, panels button for touch screens */
+    .device-bar.hud {
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 40;
+    }
+    .device-bar .chip {
+      font: inherit;
+      font-size: 12px;
+      color: var(--text);
+      background: var(--card-bg);
+      border: 1px solid var(--border-bright);
+      border-radius: 20px;
+      padding: 6px 12px;
+      text-decoration: none;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .device-bar select.chip { max-width: 55vw; }
+    .device-bar select.chip option { background: #0b1220; }
+    .device-bar #panelsBtn { display: none; }
+    body.narrow-mode .device-bar #panelsBtn { display: inline-block; }
+    body.narrow-mode .device-bar.hud { top: 12px; left: 12px; transform: none; }
+    body.narrow-mode .status-badge.hud { top: 56px; right: 12px; }
+    body.narrow-mode #fpsCounter { display: none; }
+    /* live streams: no Session Playback (nothing to pause or seek); the live head map instead */
+    body.live-only #playbackCard { display: none; }
+    body.live-only #headmapCard { display: block !important; }
+    .headmap-box { position: relative; width: 180px; height: 180px; margin: 6px auto 2px; border-radius: 8px; overflow: hidden; background: #0b1220; }
+    .headmap-box img { width: 100%; height: 100%; display: block; }
+    .headmap-lost { display: none; position: absolute; inset: 0; align-items: center; justify-content: center;
+      background: rgba(3, 5, 8, 0.6); color: #ef4444; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; }
+    .headmap-box.lost .headmap-lost { display: flex; }
+    .headmap-box.lost img { filter: grayscale(1); opacity: 0.45; }
   </style>
   <!-- Load Three.js, OrbitControls, and GLTFLoader (vendored locally for offline desktop use) -->
-  <script src="/vendor/three/three.min.js"></script>
-  <script src="/vendor/three/OrbitControls.js"></script>
-  <script src="/vendor/three/GLTFLoader.js"></script>
+  <script src="vendor/three/three.min.js"></script>
+  <script src="vendor/three/OrbitControls.js"></script>
+  <script src="vendor/three/GLTFLoader.js"></script>
   <!-- Post-processing for UnrealBloom (Glow) -->
-  <script src="/vendor/three/EffectComposer.js"></script>
-  <script src="/vendor/three/RenderPass.js"></script>
-  <script src="/vendor/three/ShaderPass.js"></script>
-  <script src="/vendor/three/CopyShader.js"></script>
-  <script src="/vendor/three/LuminosityHighPassShader.js"></script>
-  <script src="/vendor/three/UnrealBloomPass.js"></script>
+  <script src="vendor/three/EffectComposer.js"></script>
+  <script src="vendor/three/RenderPass.js"></script>
+  <script src="vendor/three/ShaderPass.js"></script>
+  <script src="vendor/three/CopyShader.js"></script>
+  <script src="vendor/three/LuminosityHighPassShader.js"></script>
+  <script src="vendor/three/UnrealBloomPass.js"></script>
 </head>
 <body>
 
@@ -525,6 +564,13 @@
   <div id="tooltip"></div>
   <div id="edgeTriggerLeft" class="edge-trigger edge-trigger-left" aria-hidden="true"></div>
   <div id="edgeTriggerRight" class="edge-trigger edge-trigger-right" aria-hidden="true"></div>
+
+  <!-- Device bar: back to the logger, which EEG device, panels (touch) -->
+  <div class="device-bar hud interactive">
+    <a id="backLink" class="chip" href="/" style="display:none">&larr; Logger</a>
+    <select id="deviceSel" class="chip" title="EEG device" style="display:none"></select>
+    <button id="panelsBtn" class="chip" title="Show / hide the panels">&#9776;</button>
+  </div>
 
   <!-- Top-Right Status Badge -->
   <div class="status-badge hud">
@@ -647,8 +693,20 @@
 
   <!-- Right Control Sidebar -->
   <aside class="inspector hud interactive">
-    <!-- Session Playback -->
-    <div class="card">
+    <!-- Live head map of the chosen device (LSL backend); takes the place of Session Playback in live mode -->
+    <div class="card" id="headmapCard" style="display:none">
+      <div class="card-title">
+        <span>Headmap</span>
+        <span id="headmapLabel" style="font-size:9px; color:var(--muted)">LIVE</span>
+      </div>
+      <div class="headmap-box" id="headmapBox">
+        <img id="headmapImg" alt="head map" width="180" height="180">
+        <div class="headmap-lost">NO SIGNAL</div>
+      </div>
+    </div>
+
+    <!-- Session Playback (replays only) -->
+    <div class="card" id="playbackCard">
       <div class="card-title">
         <span>Session Playback</span>
         <span id="playbackModeLabel" style="font-size:9px; color:var(--muted)">REPLAY</span>
@@ -1076,7 +1134,7 @@
 
     const gltfLoader = new THREE.GLTFLoader();
     gltfLoader.load(
-      "/brain_lobes.glb?v=4",
+      "brain_lobes.glb?v=4",
       (gltf) => {
         const initialOutlineOpacity = parseFloat(document.getElementById("outlineSlider").value) || 0.3;
 
@@ -1314,16 +1372,119 @@
     const statusText = document.getElementById("statusText");
     const fpsCounter = document.getElementById("fpsCounter");
 
+    // Where the data comes from: this page's own server (standalone), or -- when the page is served under
+    // /studio/ by the logger's web server -- the LSL backend on STUDIO_PORT of the same host.
+    // ?device=ID chooses the EEG device (the logger's ids: epocx1, epocx2, muse1).
+    const STUDIO_PORT = 8766;
+    const UNDER_LOGGER = location.pathname.startsWith("/studio/");
+    const API = UNDER_LOGGER ? `${location.protocol}//${location.hostname}:${STUDIO_PORT}` : "";
+    let deviceId = new URLSearchParams(location.search).get("device") || "";
+    const devQ = () => (deviceId ? `?device=${encodeURIComponent(deviceId)}` : "");
+
+    let gotDevices = false;
+    let loggerPort = null;   // the backend may name a web app on this host to link back to
+    async function initDevices() {
+      try {
+        const r = await fetch(API + "/api/devices");
+        if (!r.ok) throw new Error("no device list");
+        const j = await r.json();
+        gotDevices = true;
+        loggerPort = j.logger_port || null;
+        document.body.classList.toggle("live-only", !!j.live_only);
+        const ids = j.devices.map(d => d.id);
+        if (!ids.includes(deviceId)) deviceId = j.default;
+        const sel = document.getElementById("deviceSel");
+        const names = { epocx1: "EPOC X #1", epocx2: "EPOC X #2", muse1: "Muse" };
+        sel.textContent = "";
+        for (const d of j.devices) {
+          const o = document.createElement("option");
+          o.value = d.id;
+          o.textContent = (names[d.id] || d.name) + (d.kind === "muse" ? " (4 electrodes)" : "");
+          sel.appendChild(o);
+        }
+        sel.value = deviceId;
+        sel.style.display = "";
+        sel.addEventListener("change", () => {
+          deviceId = sel.value;
+          const u = new URL(location.href);
+          u.searchParams.set("device", deviceId);
+          history.replaceState(null, "", u);
+          // a fresh view of the other device: forget the history of this one
+          lastSessionId = null; lastGraphSampleKey = null;
+          for (const b of BAND_KEYS) { if (bandHistory[b]) bandHistory[b].length = 0; }
+          bandGraphsDirty = true;
+          currentEEGData = null;
+          headmapReset();
+          connectSSE();
+        });
+      } catch (e) {
+        // a plain single-stream server: nothing to choose
+      }
+      if (gotDevices && (loggerPort || UNDER_LOGGER)) {   // offer the way back to the app that links here
+        const back = document.getElementById("backLink");
+        back.href = loggerPort ? `${location.protocol}//${location.hostname}:${loggerPort}/` : "/";
+        back.style.display = "";
+      }
+    }
+
+    // Live head map: the image an external head map feeder keeps writing for this device, via the
+    // backend (/api/headmap). Polled with ETag like the logger does; "NO SIGNAL" when it is missing or stale.
+    const HEADMAP_STALE_S = 3;
+    const headmap = { etag: null, url: null, lost: true, timer: null };
+    function headmapReset() {
+      headmap.etag = null;
+      const img = document.getElementById("headmapImg");
+      if (img.src.startsWith("blob:")) URL.revokeObjectURL(img.src);
+      img.removeAttribute("src");
+      document.getElementById("headmapBox").classList.add("lost");
+      headmap.lost = true;
+    }
+    async function headmapTick() {
+      const t0 = performance.now();
+      if (document.body.classList.contains("live-only") && deviceId && !document.hidden) {
+        const box = document.getElementById("headmapBox");
+        const img = document.getElementById("headmapImg");
+        const dev = deviceId;
+        try {
+          const r = await fetch(`${API}/api/headmap?device=${encodeURIComponent(dev)}`, { cache: "no-cache" });
+          if (dev !== deviceId) return headmapSchedule(t0);   // device changed meanwhile
+          if (r.ok) {
+            const tag = r.headers.get("ETag") || r.headers.get("Last-Modified");
+            if (tag === null || tag !== headmap.etag) {
+              const blob = await r.blob();
+              const old = img.src;
+              img.src = URL.createObjectURL(blob);
+              if (old.startsWith("blob:")) URL.revokeObjectURL(old);
+              headmap.etag = tag;
+            }
+            const age = (Date.parse(r.headers.get("Date")) - Date.parse(r.headers.get("Last-Modified"))) / 1000;
+            headmap.lost = !(age <= HEADMAP_STALE_S);
+          } else {
+            headmap.lost = true;
+          }
+        } catch (e) {
+          headmap.lost = true;
+        }
+        box.classList.toggle("lost", headmap.lost);
+      }
+      headmapSchedule(t0);
+    }
+    function headmapSchedule(t0) {
+      const period = document.body.classList.contains("narrow-mode") ? 500 : 250;
+      headmap.timer = setTimeout(headmapTick, Math.max(0, period - (performance.now() - t0)));
+    }
+    headmapTick();
+
     function connectSSE() {
       if (sseSource) sseSource.close();
 
-      sseSource = new EventSource("/stream");
+      sseSource = new EventSource(API + "/stream" + devQ());
 
       sseSource.onopen = () => {
         if (isStreamActive && !isPlaybackPaused) {
           setStatusIndicator("status-dot online", "STREAM ACTIVE");
         }
-        fetch("/api/status")
+        fetch(API + "/api/status" + devQ())
           .then(r => r.json())
           .then(s => {
             if (s && typeof s.paused === "boolean") {
@@ -1359,7 +1520,7 @@
       };
     }
 
-    connectSSE();
+    initDevices().then(connectSSE);
 
     // FPS Meter
     setInterval(() => {
@@ -1840,7 +2001,7 @@
       if (isStreamActive) {
         updatePlaybackUI(!isPlaybackPaused, isStreamActive, currentStreamMode);
       }
-      fetch("/api/pause", {
+      fetch(API + "/api/pause" + devQ(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -1966,6 +2127,7 @@
       const bandSums = { alpha: 0, beta: 0, theta: 0, gamma: 0, delta: 0 };
       let rCount = 0;
       for (const rKey in regions) {
+        if (regions[rKey].no_data) continue;
         const bands = regions[rKey].bands;
         for (const b in bandSums) bandSums[b] += bands[b] || 0;
         rCount++;
@@ -2009,6 +2171,11 @@
         const mesh = lobeMeshes[key];
         const rData = regions[key];
         if (!rData) continue;
+        if (rData.no_data) {   // no electrode over this region: dark, nothing to show
+          mesh.userData.targetAct = 0.0;
+          mesh.userData.targetColor.setHex(INACTIVE_COLOR);
+          continue;
+        }
 
         let act = 0.0;
         let colorHex = 0x38bdf8;
@@ -2156,16 +2323,18 @@
         tooltip.style.transform = `translate3d(${pointerClientX}px, ${pointerClientY}px, 0) translate(-50%, -120%)`;
 
         setCachedText(tt.labelEl, "_ttLabel", conf.label);
-        setCachedText(tt.chSpan, "_ttCh", conf.channels.join(", "));
+        const noData = !!(rData && rData.no_data);
+        const chList = rData && Array.isArray(rData.channels) ? rData.channels : conf.channels;
+        setCachedText(tt.chSpan, "_ttCh", noData ? "no electrode" : chList.join(", "));
 
-        let displayBands = rData ? rData.bands : null;
+        let displayBands = rData && !noData ? rData.bands : null;
         let displayDom = rData ? rData.dominant : null;
-        if (!displayBands && conf.interpolatedFrom && currentEEGData && currentEEGData.regions) {
+        if (!displayBands && !noData && conf.interpolatedFrom && currentEEGData && currentEEGData.regions) {
           const avgBands = { delta: 0, theta: 0, alpha: 0, beta: 0, gamma: 0 };
           let nCount = 0;
           for (const nKey of conf.interpolatedFrom) {
             const nr = currentEEGData.regions[nKey];
-            if (nr && nr.bands) {
+            if (nr && nr.bands && !nr.no_data) {
               for (const b of BAND_KEYS) avgBands[b] += nr.bands[b] || 0;
               nCount++;
             }
@@ -2581,7 +2750,7 @@
         seekPendingSince = now;
         pendingSSEData = null;
         const payload = targetSec !== null ? { elapsed_sec: targetSec, progress: ratio } : { progress: ratio };
-        fetch("/api/seek", {
+        fetch(API + "/api/seek" + devQ(), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
@@ -2674,7 +2843,7 @@
 
       if (isBaselineLocked) {
         // Unlock and return to auto-rolling baseline
-        fetch("/api/calibrate", {
+        fetch(API + "/api/calibrate" + devQ(), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reset: true })
@@ -2696,7 +2865,7 @@
       btnCalibrate.style.borderColor = "#eab308";
       btnCalibrate.style.color = "#eab308";
 
-      fetch("/api/calibrate", { method: "POST" })
+      fetch(API + "/api/calibrate" + devQ(), { method: "POST" })
         .then(r => r.json())
         .then(() => {
           setTimeout(() => {
@@ -2840,6 +3009,21 @@
           }, 320);
         }
       }
+    }
+
+    const panelsBtn = document.getElementById("panelsBtn");
+    if (panelsBtn) {
+      panelsBtn.addEventListener("click", () => {
+        const open = sidebarEl && sidebarEl.classList.contains("revealed");
+        if (open) {
+          if (panelsHideTimer) { clearTimeout(panelsHideTimer); panelsHideTimer = null; }
+          if (sidebarEl) sidebarEl.classList.remove("revealed");
+          if (inspectorEl) inspectorEl.classList.remove("revealed");
+          if (statusBadgeEl) statusBadgeEl.classList.remove("revealed");
+        } else {
+          revealPanels(true);
+        }
+      });
     }
 
     if (edgeTriggerLeft) {

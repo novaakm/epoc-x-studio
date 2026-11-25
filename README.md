@@ -88,6 +88,29 @@ python3 -m venv venv
   - The note's **start timestamp** is captured on your first keystroke and its **end timestamp** when you press `Enter`.
   - Notes are saved to `<recording>.notes.csv` and broadcast live onto the **Live Waveforms** timeline.
 
+### B2. Brain Map in a Browser for LSL Streams (no Qt, many viewers)
+
+`epoc-lsl-brain-server` serves the 3D Brain Map as a web page for several devices at once, following their
+Lab Streaming Layer streams (`epoc-direct-record --lsl --lsl-name NAME`, or `muse-record --lsl`). It needs only
+`numpy` and `pylsl` (`pip install -e ".[lsl]"`), not PyQt, so it can run headless on a recording machine:
+
+```bash
+epoc-lsl-brain-server --host 0.0.0.0 --port 8766 \
+    epocx1='EPOCX (E1234567)' epocx2='EPOCX (E7654321)' muse1=Muse
+```
+
+Open `http://HOST:8766/?device=muse1`; the device menu at the top switches between the streams. Each device gets
+its own DSP, so viewers of different devices do not disturb each other. Streams that are not up yet are waited for.
+
+- **Muse (4 electrodes: TP9, AF7, AF8, TP10)**: AF7/AF8 stand for both frontal regions of their side, TP9/TP10 for the
+  temporal ones; the occipital regions have no electrode and are drawn dark ("no electrode"); the parietal crown is
+  interpolated from the remaining regions (`MUSE_REGION_MAPPING` in `brain_map_view.py`).
+- `--headmap-dir DIR`: show the live head map of the device (the image `status-image-<device>.png`, as written by an
+  external head map feeder) in the right panel; `--logger-port PORT`: add a "Logger" link to a web app on this host.
+- `--exit-with PID`: stop together with the process that started the server.
+- The page can also be served by another web server under `/studio/` (relative assets); it then talks to this
+  backend on port 8766 (CORS is enabled).
+
 ### C. Using the Visualization Windows
 
 Click **Launch All Live Views** to open Headmap, Live Waveforms, and 3D Brain Map together, or launch any module individually:

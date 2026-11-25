@@ -34,6 +34,7 @@ epoc-take-notes = "epoc_direct.notes_cli:main"
 epoc-probe-device = "epoc_direct.probe_cli:main"
 epoc-save-lsl = "epoc_direct.lsl_cli:save_lsl_main"
 epoc-from-lsl = "epoc_direct.lsl_cli:from_lsl_main"
+epoc-lsl-brain-server = "epoc_studio.lsl_brain_server:main"
 
 [project.gui-scripts]
 epoc-studio = "epoc_studio.launcher:main"

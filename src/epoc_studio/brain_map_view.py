@@ -21,7 +21,16 @@ from typing import Callable, Dict, List, Optional, Tuple
 import numpy as np
 
 from epoc_direct.paths import get_recordings_dir
-from .qt_common import apply_dark_titlebar, asset_path, ensure_qt_app, ensure_stdio, install_sigint_handler, open_broker_stream
+try:
+    from .qt_common import apply_dark_titlebar, asset_path, ensure_qt_app, ensure_stdio, install_sigint_handler, open_broker_stream
+except ImportError:  # no PyQt6 (headless web server, see lsl_brain_server.py): only the assets path is needed
+    def asset_path(*parts: str) -> Path:
+        return Path(__file__).resolve().parent.joinpath("assets", *parts)
+
+    def _no_qt(*_a, **_k):
+        raise RuntimeError("PyQt6 is not installed: the desktop windows are not available")
+
+    apply_dark_titlebar = ensure_qt_app = ensure_stdio = install_sigint_handler = open_broker_stream = _no_qt
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -79,6 +88,24 @@ MACRO_LOBES: Dict[str, List[str]] = {
     "occipital": ["occipital_left", "occipital_right"],
 }
 
+# Muse headband: only 4 dry electrodes (TP9, AF7, AF8, TP10), 256 Hz, in microvolts. AF7/AF8 sit on the lateral
+# forehead, so they stand for both frontal regions of their side; TP9/TP10 behind the ears for the temporal ones.
+# Regions without any electrode (occipital) get no data: the viewer shows them dark ("no electrode"); the
+# parietal crown is interpolated from what is there.
+MUSE_CHANNELS = ["TP9", "AF7", "AF8", "TP10"]
+MUSE_FS = 256.0
+MUSE_ARTIFACT_STD = 1300.0  # microvolts, the equivalent of the EPOC's 2500 ADC counts (~0.51 uV each)
+MUSE_REGION_MAPPING: Dict[str, List[str]] = {
+    "dorsal_frontal_left": ["AF7"],
+    "dorsal_frontal_right": ["AF8"],
+    "ventral_frontal_left": ["AF7"],
+    "ventral_frontal_right": ["AF8"],
+    "temporal_left": ["TP9"],
+    "temporal_right": ["TP10"],
+    "occipital_left": [],
+    "occipital_right": [],
+}
+
 WAKING_PRIORS: Dict[str, float] = {
     "delta": 0.10,
     "theta": 0.20,
@@ -102,7 +129,15 @@ class BrainDSP:
         delta_weight: float = 1.0,
         shelf_knee_hz: float = 15.0,
         use_cmr: bool = True,
+        channels: Optional[List[str]] = None,
+        region_mapping: Optional[Dict[str, List[str]]] = None,
+        artifact_std: float = 2500.0,
     ):
+        # the channel layout: sample vectors are in the order of `channels`; a region without (available)
+        # channels is reported as no_data
+        self.channels = list(channels) if channels is not None else list(EEG_CHANNELS)
+        self.region_mapping = dict(region_mapping) if region_mapping is not None else dict(REGION_MAPPING)
+        self.artifact_std = float(artifact_std)
         self.fs = fs
         self.window_sec = window_sec
         self.window_len = max(32, int(round(window_sec * fs)))
@@ -116,7 +151,7 @@ class BrainDSP:
         self.use_cmr = use_cmr
         self.baseline_locked = False
         self.reg_baselines: Dict[str, Dict[str, Optional[float]]] = {
-            r: {b: None for b in BANDS} for r in REGION_MAPPING
+            r: {b: None for b in BANDS} for r in self.region_mapping
         }
 
         self.lock = threading.Lock()
@@ -188,14 +223,14 @@ class BrainDSP:
             self.smoothed_macro.clear()
             self.baseline_locked = False
             self.calibration_baseline = None
-            self.reg_baselines = {r: {b: None for b in BANDS} for r in REGION_MAPPING}
+            self.reg_baselines = {r: {b: None for b in BANDS} for r in self.region_mapping}
             return self.equalize
 
     def reset_baseline(self) -> bool:
         with self.lock:
             self.baseline_locked = False
             self.calibration_baseline = None
-            self.reg_baselines = {r: {b: None for b in BANDS} for r in REGION_MAPPING}
+            self.reg_baselines = {r: {b: None for b in BANDS} for r in self.region_mapping}
             self.smoothed_regions.clear()
             self.smoothed_macro.clear()
             return True
@@ -380,9 +415,12 @@ class BrainDSP:
             dur_override = self.replay_duration_override if self.is_replay else None
             can_seek = bool(is_replay and self._seek_callback is not None)
             sample_count = self.sample_count
+            channels_all = self.channels
+            region_mapping = self.region_mapping
+            artifact_std = self.artifact_std
 
         std_per_ch = np.std(raw_window, axis=0)
-        is_artifact = bool(np.any(std_per_ch > 2500.0))
+        is_artifact = bool(np.any(std_per_ch > artifact_std))
 
         # Closed-form linear detrend (equivalent to degree-1 polyfit without Vandermonde/SVD)
         win_mean = np.mean(raw_window, axis=0, keepdims=True)
@@ -405,17 +443,29 @@ class BrainDSP:
 
         psd_proc = (psd * shelf) if equalize else psd
 
-        ch_band_powers: Dict[str, Dict[str, float]] = {ch: {} for ch in EEG_CHANNELS}
+        ch_band_powers: Dict[str, Dict[str, float]] = {ch: {} for ch in channels_all}
         for bname, (mask, bw) in band_masks.items():
             bp = np.sum(psd_proc[mask, :], axis=0) / bw
             if equalize and bname == "delta":
                 bp = bp * delta_weight
-            for idx, ch in enumerate(EEG_CHANNELS):
+            for idx, ch in enumerate(channels_all):
                 ch_band_powers[ch][bname] = float(bp[idx])
 
         region_results: Dict[str, Dict] = {}
         raw_region_powers: Dict[str, Dict[str, float]] = {}
-        for rname, channels in REGION_MAPPING.items():
+        for rname, channels in region_mapping.items():
+            channels = [c for c in channels if c in ch_band_powers]
+            if not channels:   # no electrode over this region (e.g. Muse: occipital)
+                region_results[rname] = {
+                    "no_data": True,
+                    "activity": 0.0,
+                    "dominant": "alpha",
+                    "color": BAND_COLORS["alpha"],
+                    "bands": {b: 0.0 for b in BANDS},
+                    "raw_power": {b: 0.0 for b in BANDS},
+                    "channels": [],
+                }
+                continue
             r_powers = {b: 0.0 for b in BANDS}
             for ch in channels:
                 for b in BANDS:
@@ -460,10 +510,18 @@ class BrainDSP:
                 "color": BAND_COLORS[dominant],
                 "bands": {b: round(float(smooth_bands[b]), 3) for b in BANDS},
                 "raw_power": {b: round(float(r_powers[b]), 2) for b in BANDS},
+                "channels": list(channels),
             }
 
         macro_results: Dict[str, Dict] = {}
         for mname, sub_regions in MACRO_LOBES.items():
+            sub_regions = [sr for sr in sub_regions if not region_results[sr].get("no_data")]
+            if not sub_regions:
+                macro_results[mname] = {
+                    "no_data": True, "activity": 0.0, "dominant": "alpha", "color": BAND_COLORS["alpha"],
+                    "bands": {b: 0.0 for b in BANDS},
+                }
+                continue
             m_bands = {b: 0.0 for b in BANDS}
             m_act = 0.0
             for sr in sub_regions:
@@ -483,23 +541,19 @@ class BrainDSP:
                 "bands": {b: round(float(m_bands[b]), 3) for b in BANDS},
             }
 
+        live_regions = [r for r in region_mapping if not region_results[r].get("no_data")]
         global_bands = {
-            b: float(np.mean([region_results[r]["bands"][b] for r in REGION_MAPPING]))
+            b: float(np.mean([region_results[r]["bands"][b] for r in live_regions]))
             for b in BANDS
         }
         denom = global_bands["alpha"] + global_bands["theta"] + 1e-9
         engagement = float(np.clip(global_bands["beta"] / denom, 0.0, 3.0))
 
-        alpha_prominence = float(
-            np.mean(
-                [
-                    region_results["occipital_left"]["bands"]["alpha"],
-                    region_results["occipital_right"]["bands"]["alpha"],
-                    region_results["temporal_left"]["bands"]["alpha"],
-                    region_results["temporal_right"]["bands"]["alpha"],
-                ]
-            )
-        )
+        posterior = [
+            r for r in ("occipital_left", "occipital_right", "temporal_left", "temporal_right")
+            if r in live_regions
+        ]
+        alpha_prominence = float(np.mean([region_results[r]["bands"]["alpha"] for r in posterior])) if posterior else 0.0
 
         try:
             dt = datetime.datetime.fromtimestamp(current_time)
@@ -539,6 +593,7 @@ class BrainDSP:
             "global_dominant": max(global_bands.keys(), key=lambda b: global_bands[b]),
             "regions": region_results,
             "macro_regions": macro_results,
+            "channels": list(channels_all),
             "band_colors": BAND_COLORS,
         }
         with self.lock:
@@ -560,7 +615,9 @@ class BrainDSP:
         if not self.calibration_samples:
             return
         baseline: Dict[str, Dict[str, Tuple[float, float]]] = {}
-        for rname in REGION_MAPPING:
+        for rname in self.region_mapping:
+            if rname not in self.calibration_samples[0]:   # no electrode there
+                continue
             baseline[rname] = {}
             for b in BANDS:
                 vals = [s[rname][b] for s in self.calibration_samples]
